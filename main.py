@@ -181,6 +181,93 @@ def macd_v2_strategy(df):
                 balance[1].append(df.index[i])
     return transactions, balance
 
+def bollinger_vwap_rsi_strategy(df):
+    # Убедиться, что все данные числовые
+    df['high'] = pd.to_numeric(df['high'], errors='coerce')
+    df['low'] = pd.to_numeric(df['low'], errors='coerce')
+    df['close'] = pd.to_numeric(df['close'], errors='coerce')
+    df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
+    
+    # Перевернуть DataFrame для удобства расчета индикаторов
+    df_reversed = df[::-1]
+    
+    # Рассчитать индикаторы на перевернутом DataFrame
+    bollinger = ta.volatility.BollingerBands(df_reversed['close'])
+    df_reversed['bollinger_high'] = bollinger.bollinger_hband()
+    df_reversed['bollinger_low'] = bollinger.bollinger_lband()
+    
+    vwap = ta.volume.VolumeWeightedAveragePrice(
+        df_reversed['high'], df_reversed['low'], df_reversed['close'], df_reversed['volume']
+    )
+    df_reversed['vwap'] = vwap.vwap
+    
+    df_reversed['rsi'] = ta.momentum.RSIIndicator(df_reversed['close']).rsi()
+    
+    # Перевернуть DataFrame обратно для дальнейшего анализа
+    df = df_reversed[::-1]
+
+    transactions = []
+    current_balance = 100
+    balance = [[], []]
+    balance[0].append(current_balance)
+    balance[1].append(df.index[-1])
+    position_size = 1
+    trade_open = False
+    open_price = 0
+    open_time = 0
+    tp = 0
+    sl = 0
+    type = 0  # 1 - long, -1 - short
+
+    for i in range(15, len(df)):
+        if trade_open:
+            if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
+                close_price = tp
+                close_time = df.index[i]
+                result = 1
+                trade_open = False
+                transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
+                current_balance += current_balance * position_size * 0.01 * (tp - open_price) / open_price * type
+                balance[0].append(current_balance)
+                balance[1].append(df.index[i])
+            elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
+                close_price = sl
+                close_time = df.index[i]
+                result = 0
+                trade_open = False
+                transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
+                current_balance -= current_balance * position_size * 0.01 * (open_price - sl) / open_price * type
+                balance[0].append(current_balance)
+                balance[1].append(df.index[i])
+            else:
+                balance[0].append(current_balance)
+                balance[1].append(df.index[i])
+        else:
+            if (df['close'].iloc[i] < df['bollinger_low'].iloc[i]) and \
+               (df['close'].iloc[i-15:i] > df['vwap'].iloc[i-15:i]).all() and \
+               df['rsi'].iloc[i] < 45:
+                open_price = df['close'].iloc[i]
+                open_time = df.index[i]
+                sl = df['low'].iloc[i-8:i].min()
+                tp = open_price + 1.5 * (open_price - sl)
+                type = 1  # long
+                trade_open = True
+                balance[0].append(current_balance)
+                balance[1].append(df.index[i])
+            
+            elif (df['close'].iloc[i] > df['bollinger_high'].iloc[i]) and \
+                 (df['close'].iloc[i-15:i] < df['vwap'].iloc[i-15:i]).all() and \
+                 df['rsi'].iloc[i] > 55:
+                open_price = df['close'].iloc[i]
+                open_time = df.index[i]
+                sl = df['high'].iloc[i-8:i].max()
+                tp = open_price - 1.5 * (sl - open_price)
+                type = -1  # short
+                trade_open = True
+                balance[0].append(current_balance)
+                balance[1].append(df.index[i])
+
+    return transactions, balance
 
 def plot_candlestick(df, transactions, balance):
     df['ts'] = pd.to_datetime(df.index, unit='ms', errors='coerce')
@@ -223,7 +310,10 @@ def plot_candlestick(df, transactions, balance):
             wins += 1
         else:
             losses += 1
-    winrate = round(wins/(wins+losses)*100, ndigits=2)
+    if wins+losses == 0:
+        winrate = 0
+    else:
+        winrate = round(wins/(wins+losses)*100, ndigits=2)
     profit = round((balance[0][-1]-balance[0][0])/balance[0][0]*100, ndigits=2)
 
     # Рисуем области tp и sl 
@@ -331,13 +421,13 @@ def plot_candlestick(df, transactions, balance):
 
 if __name__ == '__main__':
     symbol = 'BTC-USDT'
-    interval = '1H'
-    limit = 5000
+    interval = '5m'
+    limit = 1500
     data = get_okx_ohlcv(symbol, interval, limit)
     if data:
         df = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
         df[['open', 'high', 'low', 'close']] = df[['open', 'high', 'low', 'close']].astype(float)
         df['ts'] = pd.to_datetime(df['ts'], unit='ms')
         df.set_index('ts', inplace=True)
-        transactions, balance = macd_v2_strategy(df)
+        transactions, balance = bollinger_vwap_rsi_strategy(df)
         plot_candlestick(df, transactions, balance)
