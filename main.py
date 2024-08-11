@@ -1,6 +1,6 @@
 
 import sys
-from PyQt5.QtWidgets import  QMainWindow, QApplication, QVBoxLayout, QWidget, QPushButton, QLineEdit, QLabel, QHBoxLayout, QComboBox, QSpinBox, QFormLayout, QProgressBar  # type: ignore
+from PyQt5.QtWidgets import  QMainWindow, QApplication, QVBoxLayout, QWidget, QPushButton, QLineEdit, QLabel, QHBoxLayout, QComboBox, QSpinBox, QFormLayout, QProgressBar, QFileDialog  # type: ignore
 from PyQt5 import QtCore, QtGui, QtWidgets # type: ignore
 from PyQt5.QtGui import *  # type: ignore
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, pyqtSlot # type: ignore
@@ -23,40 +23,9 @@ from tkinter import ttk
 from matplotlib.figure import Figure # type: ignore
 import concurrent.futures
 import ta # type: ignore
+import mplfinance as mpf # type: ignore
 
 pd.options.mode.chained_assignment = None
-
-
-class DataLoader(QThread):
-    data_loaded = pyqtSignal(pd.DataFrame)
-
-    def __init__(self, num_candles, num_threads, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.num_candles = num_candles
-        self.num_threads = num_threads
-
-    def run(self):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.num_threads) as executor:
-            futures = []
-            candles_per_thread = self.num_candles // self.num_threads
-
-            for i in range(self.num_threads):
-                start_index = i * candles_per_thread
-                end_index = (i + 1) * candles_per_thread
-                futures.append(executor.submit(self.load_data_chunk, start_index, end_index))
-
-            results = [future.result() for future in concurrent.futures.as_completed(futures)]
-            full_data = pd.concat(results).sort_index()
-
-            self.data_loaded.emit(full_data)
-
-    def load_data_chunk(self, start_index, end_index):
-        # Replace with actual data loading logic
-        time = np.arange(start_index, end_index)
-        price = np.random.randn(end_index - start_index) + 100
-        df = pd.DataFrame({'time': time, 'price': price})
-        return df
-    
 
 class MplCanvas(FigureCanvas):
 
@@ -477,8 +446,9 @@ class CryptoTradingApp(QWidget):
         self.canvas.ax1.xaxis.set_major_locator(locator)
         self.canvas.ax1.xaxis.set_major_formatter(formatter)
 
-        # Легенды 
-        self.canvas.ax2.legend(loc='upper left', edgecolor='white')
+        # Легенды
+        self.canvas.ax1.legend(loc='upper left', edgecolor='white') 
+        #self.canvas.ax2.legend(loc='upper left', edgecolor='white')
         self.canvas.ax3.legend(loc='upper left', edgecolor='white')
 
         # Побочная инфа
@@ -553,12 +523,24 @@ class CryptoTradingApp(QWidget):
         self.bar.setAlignment(Qt.AlignCenter) 
         
         form_layout.addRow(download_label, self.bar)
+        layout.addLayout(form_layout)
+
+
+        button_layout = QHBoxLayout()
 
         self.run_button = QPushButton('Run Strategy', self)
         self.run_button.clicked.connect(self.run_strategy)
+        button_layout.addWidget(self.run_button)
+        
+        self.save_button = QPushButton('Save Candlesticks', self)
+        self.save_button.clicked.connect(self.save_candlesticks)
+        button_layout.addWidget(self.save_button)
+        
+        self.load_button = QPushButton('Load Candlesticks', self)
+        self.load_button.clicked.connect(self.load_candlesticks)
+        button_layout.addWidget(self.load_button)
 
-        layout.addLayout(form_layout)
-        layout.addWidget(self.run_button)
+        layout.addLayout(button_layout)
 
         # Создаем canvas и добавляем в layout
         self.canvas = MplCanvas(self, width=5, height=4, dpi=100)
@@ -573,23 +555,54 @@ class CryptoTradingApp(QWidget):
             self.sizePolicy().Expanding,
             self.sizePolicy().Expanding
         )
+        
         self.canvas.updateGeometry()
         self.show()
+
+    def save_candlesticks(self):
+        symbol = self.symbol_input.currentText()
+        interval = self.interval_input.currentText()
+        limit = self.limit_input.value()
+        data = self.get_okx_ohlcv(symbol, interval, limit)
+        self.df = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
+        self.df[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']] = self.df[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']].astype(float)
+        self.df['ts'] = pd.to_datetime(self.df['ts'], unit='ms')
+        self.df.set_index('ts', inplace=True)
+
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save Candlestick Data", "", "CSV Files (*.csv)")
+        if file_name:
+            self.df.to_csv(file_name)
+            print(f"Candlestick data saved to {file_name}")
+        else:
+            print('suka')
+
+
+    def load_candlesticks(self):
+        file_name, _ = QFileDialog.getOpenFileName(self, "Load Candlestick Data", "", "CSV Files (*.csv)")
+        if file_name:
+            self.df = pd.read_csv(file_name, index_col=0, parse_dates=True)
+            print(f"Candlestick data loaded from {file_name}")
+            self.current_strategy = self.macd_strategy
+            if self.strat_input.currentText() == "MACD":
+                self.current_strategy = self.macd_strategy
+            elif self.strat_input.currentText() == "MACD v2":
+                self.current_strategy = self.macd_v2_strategy
+            elif self.strat_input.currentText() == "Bollinger + VWAP + RSI":
+                self.current_strategy = self.bollinger_vwap_rsi_strategy
+
+            transactions, balance = self.current_strategy(self.df)
+            self.plot_candlestick(self.df, transactions, balance)
 
     def run_strategy(self):
         symbol = self.symbol_input.currentText()
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
 
-        if not symbol:
-            self.result_label.setText("Please enter a valid symbol")
-            return
-
         data = self.get_okx_ohlcv(symbol, interval, limit)
-        df = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
-        df[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']] = df[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']].astype(float)
-        df['ts'] = pd.to_datetime(df['ts'], unit='ms')
-        df.set_index('ts', inplace=True)
+        self.df = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
+        self.df[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']] = self.df[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']].astype(float)
+        self.df['ts'] = pd.to_datetime(self.df['ts'], unit='ms')
+        self.df.set_index('ts', inplace=True)
         
         self.current_strategy = self.macd_strategy
         if self.strat_input.currentText() == "MACD":
@@ -599,8 +612,8 @@ class CryptoTradingApp(QWidget):
         elif self.strat_input.currentText() == "Bollinger + VWAP + RSI":
             self.current_strategy = self.bollinger_vwap_rsi_strategy
 
-        transactions, balance = self.current_strategy(df)
-        self.plot_candlestick(df, transactions, balance)
+        transactions, balance = self.current_strategy(self.df)
+        self.plot_candlestick(self.df, transactions, balance)
 
 
 def main():
