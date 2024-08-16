@@ -70,7 +70,7 @@ class CryptoTradingApp(QWidget):
         self.limit_input.setValue(1000)
 
         self.strat_input = QComboBox(self)
-        self.strat_input.addItems(['MACD v3', 'Supertrend', 'Supertrend percent','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2'])
+        self.strat_input.addItems(['Supertrend', 'Supertrend stupid','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3'])
 
         form_layout = QFormLayout()
         symbol_label = QtWidgets.QLabel('Symbol:')
@@ -109,12 +109,12 @@ class CryptoTradingApp(QWidget):
         self.save_button.clicked.connect(self.file_handler.save_candlesticks)
         button_layout.addWidget(self.save_button)
         
-        self.load_button = QPushButton('Load Candlesticks', self)
-        self.load_button.clicked.connect(self.file_handler.load_candlesticks)
+        self.load_button = QPushButton('Open Candlesticks', self)
+        self.load_button.clicked.connect(self.open_and_run)
         button_layout.addWidget(self.load_button)
 
         self.tai_button = QPushButton('Train AI', self)
-        self.tai_button.clicked.connect(self.ai_manager.train_ai)
+        self.tai_button.clicked.connect(self.ai_manager.train_model)
         button_layout.addWidget(self.tai_button)
 
         self.rai_button = QPushButton('Run AI', self)
@@ -140,17 +140,16 @@ class CryptoTradingApp(QWidget):
         self.canvas.updateGeometry()
         self.show()
 
+    def open_and_run(self):
+        self.file_handler.load_candlesticks()
+        self.run_strategy()
+
     def download_and_run(self):
         symbol = self.symbol_input.currentText()
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
 
-        data = self.get_okx_ohlcv(symbol, interval, limit)
-
-        self.df = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
-        self.df[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']] = self.df[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']].astype(float)
-        self.df['ts'] = pd.to_datetime(self.df['ts'], unit='ms')
-        self.df.set_index('ts', inplace=True)
+        self.df = self.get_okx_ohlcv(symbol, interval, limit)
         
         self.run_strategy()
 
@@ -165,14 +164,11 @@ class CryptoTradingApp(QWidget):
             self.current_strategy = self.strategy_manager.bollinger_v2
         elif self.strat_input.currentText() == "Supertrend":
             self.current_strategy = self.strategy_manager.supertrend_strategy
-        elif self.strat_input.currentText() == "Supertrend percent":
-            self.current_strategy = self.strategy_manager.supertrend_percent_strategy
+        elif self.strat_input.currentText() == "Supertrend stupid":
+            self.current_strategy = self.strategy_manager.supertrend_stupid
         elif self.strat_input.currentText() == "MACD v3":
             self.current_strategy = self.strategy_manager.macd_v3_strategy
             
-
-            
-
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
         self.canvas.ax3.clear()
@@ -210,6 +206,13 @@ class CryptoTradingApp(QWidget):
                 break
 
         self.bar.setValue(100) 
+        data = data[::-1]
+
+        data = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
+        data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']] = data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']].astype(float)
+        data['ts'] = pd.to_datetime(data['ts'], unit='ms')
+        data.set_index('ts', inplace=True)
+
         return data
 
     def plot_candlestick(self, df, transactions, balance):
@@ -217,7 +220,6 @@ class CryptoTradingApp(QWidget):
         # Рисуем линии на фоне
         self.canvas.ax1.grid(True, axis='both', linewidth=0.3, color='gray')
         self.canvas.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
-
 
         wins = 0
         losses = 0
@@ -238,7 +240,6 @@ class CryptoTradingApp(QWidget):
             percent5 = int(len(df) / 20)
             index = 0 
             # Рисуем свечи
-            df[['open', 'high', 'low', 'close']] = df[['open', 'high', 'low', 'close']].astype(float)
             candlestick_data = zip(mdates.date2num(df.index.to_pydatetime()), df['open'], df['high'], df['low'], df['close'])
             for date, open, high, low, close in candlestick_data:
                 if index % percent5 == 0:
@@ -291,6 +292,22 @@ class CryptoTradingApp(QWidget):
 
         self.bar.setValue(40)
 
+        max_profit = 0.0
+        patch_count = int(len(df)/500)
+        step = int((len(balance[0])-1)/patch_count)
+        for i in range (0, len(balance[0])-1-step, step):
+            if abs((balance[0][i+step] - balance[0][i]) / balance[0][i]) > max_profit:
+                        max_profit = abs((balance[0][i+step] - balance[0][i]) / balance[0][i])
+
+        for i in range (0, len(balance[0])-1-step, step):
+            patch_color = '#089981' if (balance[0][i+step] - balance[0][i]) > 0 else '#F23645'
+            self.canvas.ax3.add_patch(plt.Rectangle(
+                        (balance[1][i], min(balance[0])),
+                        (balance[1][-1] - balance[1][0])/patch_count,
+                        abs((balance[0][i+step] - balance[0][i]) / balance[0][i])/max_profit*max(balance[0]),
+                        color=patch_color, alpha=0.2
+                    ))
+
         # Рисуем баланс
         index = 0 
         if max(balance[0]) / min(balance[0]) < 4:
@@ -308,6 +325,8 @@ class CryptoTradingApp(QWidget):
             self.canvas.ax3.fill_between(balance[1], Max[x], balance[0], where=balance[0] >= Max[x], facecolor='#089981', alpha=0.05)
         for x in range (int(min(balance[0])), int(balance[0][0]), step):
             self.canvas.ax3.fill_between(balance[1], balance[0], Max[x], where=balance[0] <= Max[x], facecolor='#FF5045', alpha=0.05)
+        
+
         max_drawdown = 0
         max_balance = 0
         self.bar.setValue(80)
@@ -316,6 +335,7 @@ class CryptoTradingApp(QWidget):
                 max_balance = balance[0][i]
             if (max_balance - balance[0][i]) * 100 / max_balance > max_drawdown:
                 max_drawdown = (max_balance - balance[0][i]) * 100 / max_balance
+
 
         for label in self.canvas.ax3.get_yticklabels(which='both'):
             label.set_color("white")
