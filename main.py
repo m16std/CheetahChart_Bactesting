@@ -293,13 +293,13 @@ class CryptoTradingApp(QWidget):
         self.bar.setValue(40)
 
         max_profit = 0.0
-        patch_count = int(len(df)/500)
+        patch_count = 50
         step = int((len(balance[0])-1)/patch_count)
         for i in range (0, len(balance[0])-1-step, step):
             if abs((balance[0][i+step] - balance[0][i]) / balance[0][i]) > max_profit:
                         max_profit = abs((balance[0][i+step] - balance[0][i]) / balance[0][i])
 
-        for i in range (0, len(balance[0])-1-step, step):
+        for i in range (patch_count):
             patch_color = '#089981' if (balance[0][i+step] - balance[0][i]) > 0 else '#F23645'
             self.canvas.ax3.add_patch(plt.Rectangle(
                         (balance[1][i], min(balance[0])),

@@ -6,98 +6,131 @@ import ta # type: ignore
 from sklearn.preprocessing import MinMaxScaler  # type: ignore
 import tensorflow as tf  # type: ignore
 from tensorflow.keras.models import Sequential  # type: ignore
-from tensorflow.keras.layers import Dense, LSTM  # type: ignore
+from tensorflow.keras.layers import LSTM, Dense, Dropout, Input # type: ignore
 import matplotlib.dates as mdates # type: ignore
-from keras.models import Sequential # type: ignore
-from keras.layers import LSTM, Dense, Dropout, Input # type: ignore
 from tensorflow.keras.losses import MeanSquaredError # type: ignore
+from sklearn.model_selection import train_test_split # type: ignore
+from tensorflow.keras.callbacks import EarlyStopping # type: ignore
+from sklearn.preprocessing import MinMaxScaler  # type: ignore
+from tensorflow.keras.models import Sequential  # type: ignore
+from tensorflow.keras.layers import Dense, LSTM  # type: ignore
 
 
 class AIManager:
     def __init__(self, app):
         self.app = app
     
+    def calculate_best_trades(self, df, lookahead, min_movement):
+        df = df.copy()  # создаем копию, чтобы не изменять оригинальный DataFrame
+        
+        # Проверяем, что DataFrame не пустой
+        if df.empty:
+            raise ValueError("DataFrame пустой. Проверьте загрузку данных.")
+        
+        # Проверяем, какие индексы у DataFrame
+        if not isinstance(df.index, pd.RangeIndex):
+            df = df.reset_index(drop=True)
+
+        for i in range(len(df) - lookahead):
+            current_close = df.loc[i, 'close']
+            max_future_price = df.loc[i:i + lookahead, 'high'].max()
+            min_future_price = df.loc[i:i + lookahead, 'low'].min()
+            
+            upward_movement = (max_future_price - current_close) / current_close * 100
+            downward_movement = (current_close - min_future_price) / current_close * 100
+            
+            if upward_movement > downward_movement:
+                df.loc[i, 'order'] = 1 * upward_movement / (downward_movement+0.1)
+            else:
+                df.loc[i, 'order'] = -1 * downward_movement / (upward_movement+0.1)
+
+        for i in range(len(df) - lookahead, len(df)):
+            df.loc[i, 'order'] = 0
+
+        return df
+
     def create_lstm_model(self, input_shape):
         model = Sequential()
         model.add(Input(shape=input_shape))
-        model.add(LSTM(50, return_sequences=True))
-        model.add(Dropout(0.2))
-        model.add(LSTM(50, return_sequences=False))
-        model.add(Dropout(0.2))
-        model.add(Dense(50, activation='relu'))
-        model.add(Dense(3))  # Три выхода: направление, тейк-профит, стоп-лосс
-        model.compile(optimizer='adam', loss=self.custom_loss)
+        model.add(LSTM(64, return_sequences=True))
+        model.add(LSTM(32))
+        model.add(Dense(32, activation='relu'))
+        model.add(Dense(1))  # Три выхода: направление сделки, стоп-лосс и тейк-профит
+
+        model.compile(optimizer='adam', loss='mean_squared_error')
         return model
 
-    def custom_loss(self, y_true, y_pred):
-        direction_true, take_profit_true, stop_loss_true = tf.split(y_true, num_or_size_splits=3, axis=-1)
-        direction_pred, take_profit_pred, stop_loss_pred = tf.split(y_pred, num_or_size_splits=3, axis=-1)
-        
-        # Приведение предсказаний направления сделки к нужной форме
-        direction_pred = tf.squeeze(direction_pred, axis=-1)
-
-        # Функции потерь для каждого выхода
-        loss_direction = tf.keras.losses.BinaryCrossentropy()(direction_true, direction_pred)
-        loss_tp = MeanSquaredError()(take_profit_true, take_profit_pred)
-        loss_sl = MeanSquaredError()(stop_loss_true, stop_loss_pred)
-        
-        # Комбинированная функция потерь
-        loss = loss_direction + loss_tp + loss_sl
-        return loss
-
     def train_model(self):
-        epochs=10
-        batch_size=32
-        self.app.file_handler.load_candlesticks()
-        self.app.X, self.app.y = self.prepare_data()
-        input_shape = (self.app.X.shape[1], self.app.X.shape[2])
-        model = self.create_lstm_model(input_shape)
-        model.fit(self.app.X, self.app.y, epochs=epochs, batch_size=batch_size)
-        self.app.model = model
+        epochs=100
+        batch_size=1
+        lookback=1
+
+        if not self.app.file_handler.load_candlesticks():
+            return
+        
+        print('Добавление индикаторов')
+        self.app.df = self.calculate_indicators(self.app.df)
+
+        print('Рассчет сделок для обучения')
+        self.app.df = self.calculate_best_trades(self.app.df, lookahead=4, min_movement=1)
+
+        print('Сортировка данных')
+        X, y = self.prepare_training_data(self.app.df, n_candles=lookback)
+
+        print(X)
+        print(y)
+
+        input_shape = (lookback, 5)
+        self.app.model = self.create_lstm_model(input_shape)     
+
+        print('Обучение нейронки')
+        history = self.app.model.fit(X, y, epochs=epochs, batch_size=batch_size, validation_split=0.2, verbose=1)
+
         self.app.file_handler.save_model_dialog()
+
+    def predict(self, X):
+        return self.app.model.predict(X)
     
-    def predict_with_lstm(self, data):
-        # Предсказание
-        predictions = self.model.predict(data)
-        direction_pred = (predictions[:, 0] > 0.5).astype(int)
-        take_profit_pred = predictions[:, 1]
-        stop_loss_pred = predictions[:, 2]
-        return direction_pred, take_profit_pred, stop_loss_pred
+    def predict_next_action(self, df, n_candles):
+        # Рассчитываем индикаторы для последних n_candles
+        indicators = df[['rsi', 'atr', 'ma_50', 'ma_200', 'ma200-price']].iloc[-n_candles:].values
+        indicators = indicators.reshape(1, n_candles, indicators.shape[1])
 
+        # Прогнозируем направление сделки, стоп-лосс и тейк-профит
+        prediction = self.predict(indicators)
 
-    # Загружаем данные и вычисляем индикаторы
-    def prepare_data(self):
-        self.app.df['RSI'] = ta.momentum.RSIIndicator(self.app.df['close'], window=14).rsi()
-        self.app.df['MACD'] = ta.trend.MACD(self.app.df['close']).macd()
-        self.app.df['Signal_Line'] = ta.trend.MACD(self.app.df['close']).macd_signal()
-        self.app.df['MA50'] = ta.trend.SMAIndicator(self.app.df['close'], window=50).sma_indicator()
-        self.app.df['MA200'] = ta.trend.SMAIndicator(self.app.df['close'], window=200).sma_indicator()
+        direction = prediction[0]  # Направление сделки
 
-        # Убираем строки с NaN
-        self.app.df.dropna(inplace=True)
+        return direction
+    def calculate_indicators(self, df):
+        df['rsi'] = ta.momentum.RSIIndicator(df['close'], window=14).rsi()
+        df['atr'] = ta.volatility.AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
+        df['ma_50'] = (df['close'].rolling(window=50).mean() / df['close'] - 1) * 100
+        df['ma_200'] = (df['close'].rolling(window=200).mean() / df['close'] - 1) * 100
+        df['ma200-price'] = (df['close'].rolling(window=200).mean() - df['close']) / df['close'] * 100
 
-        # Используем нужные колонки в качестве признаков
-        feature_columns = ['RSI', 'MACD', 'Signal_Line', 'MA50', 'MA200']
-        data = self.app.df[feature_columns].values
-
-        # Нормализация данных
-        self.app.scaler = MinMaxScaler(feature_range=(0, 1))
-        scaled_data = self.app.scaler.fit_transform(data)
-
-        # Подготовка данных для LSTM
+        df.dropna(inplace=True)
+        return df
+    
+    def prepare_training_data(self, df, n_candles):
         X = []
         y = []
-        lookback = 50
 
-        for i in range(lookback, len(scaled_data)):
-            X.append(scaled_data[i-lookback:i])
-            y.append(self.app.df['close'].values[i])
+        for i in range(n_candles, len(df)):
+            # Входные данные: последние n_candles значений индикаторов
+            indicators = df[['rsi', 'atr', 'ma_50', 'ma_200', 'ma200-price']].iloc[i-n_candles:i].values
+            X.append(indicators)
 
-        X, y = np.array(X), np.array(y)
+            # Выходные данные: направление сделки (order)
+            y.append(df[['order']].iloc[i].values)
+
+        X = np.array(X)
+        y = np.array(y)
 
         return X, y
 
     def strategy_with_lstm(self):
+        """
         self.app.X, self.app.y = self.prepare_data()
         direction, tp, sl = self.predict_with_lstm(self.app.X)
         
@@ -122,9 +155,13 @@ class AIManager:
         #self.app.canvas.ax1.scatter(self.app.df.index.to_pydatetime(), self.app.df['predicted_close'], label='Predicted Close Price', color='orange', s=8)
         self.app.canvas.draw()
         self.app.show()
+        """
+        direction= self.predict_next_action(self.calculate_indicators(self.app.df, n_candles = 1))
+        print(f"Направление сделки: {direction}")
+
     
     def run_ai(self):
-        self.app.file_handler.load_model_dialog()
-        self.app.file_handler.load_candlesticks()
-
-        self.strategy_with_lstm()
+        a = self.app.file_handler.load_model_dialog()
+        b = self.app.file_handler.load_candlesticks()
+        if a * b == True:
+            self.strategy_with_lstm()
