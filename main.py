@@ -38,6 +38,10 @@ class MplCanvas(FigureCanvas):
         for tick in self.ax3.get_yticklabels():
             tick.set_color('white')
 
+        # Рисуем линии на фоне
+        self.ax1.grid(True, axis='both', linewidth=0.3, color='gray')
+        self.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
+
         plt.subplots_adjust(left=0.04, bottom=0.03, right=1, top=1, hspace=0.12)
         super(MplCanvas, self).__init__(fig)
 
@@ -216,11 +220,6 @@ class CryptoTradingApp(QWidget):
         return data
 
     def plot_candlestick(self, df, transactions, balance):
-
-        # Рисуем линии на фоне
-        self.canvas.ax1.grid(True, axis='both', linewidth=0.3, color='gray')
-        self.canvas.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
-
         wins = 0
         losses = 0
         winrate = 0

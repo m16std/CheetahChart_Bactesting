@@ -47,6 +47,19 @@ class AIManager:
         for i in range(len(df) - lookahead, len(df)):
             df.loc[i, 'order'] = 0
 
+        srednee = 0
+        mse = 0
+
+        for i in range (len(df)):
+            srednee += df['order'].iloc[i]
+        srednee/=len(df)
+
+        for i in range (len(df)):
+            mse += (srednee-df['order'].iloc[i])*(srednee-df['order'].iloc[i])
+        mse/=len(df)
+
+        print('Если loss: '+str(mse)+' то нейронка не работает')
+        
         return df
 
     def create_lstm_model(self, input_shape):
@@ -61,7 +74,7 @@ class AIManager:
         return model
 
     def train_model(self):
-        epochs=100
+        epochs=50
         batch_size=1
         lookback=1
 
@@ -72,15 +85,12 @@ class AIManager:
         self.app.df = self.calculate_indicators(self.app.df)
 
         print('Рассчет сделок для обучения')
-        self.app.df = self.calculate_best_trades(self.app.df, lookahead=4, min_movement=1)
+        self.app.df = self.calculate_best_trades(self.app.df, lookahead=2, min_movement=1)
 
         print('Сортировка данных')
         X, y = self.prepare_training_data(self.app.df, n_candles=lookback)
 
-        print(X)
-        print(y)
-
-        input_shape = (lookback, 5)
+        input_shape = (lookback, 6)
         self.app.model = self.create_lstm_model(input_shape)     
 
         print('Обучение нейронки')
@@ -93,7 +103,7 @@ class AIManager:
     
     def predict_next_action(self, df, n_candles):
         # Рассчитываем индикаторы для последних n_candles
-        indicators = df[['rsi', 'atr', 'ma_50', 'ma_200', 'ma200-price']].iloc[-n_candles:].values
+        indicators = df[['rsi','atr','ma_50','ma_200','ma50-price','ma200-price']].iloc[-n_candles:].values
         indicators = indicators.reshape(1, n_candles, indicators.shape[1])
 
         # Прогнозируем направление сделки, стоп-лосс и тейк-профит
@@ -105,9 +115,25 @@ class AIManager:
     def calculate_indicators(self, df):
         df['rsi'] = ta.momentum.RSIIndicator(df['close'], window=14).rsi()
         df['atr'] = ta.volatility.AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
-        df['ma_50'] = (df['close'].rolling(window=50).mean() / df['close'] - 1) * 100
-        df['ma_200'] = (df['close'].rolling(window=200).mean() / df['close'] - 1) * 100
-        df['ma200-price'] = (df['close'].rolling(window=200).mean() - df['close']) / df['close'] * 100
+        df['ma_50'] = df['close'].rolling(window=50).mean() 
+        df['ma_200'] = df['close'].rolling(window=200).mean()
+        df['ma50-price'] = (df['ma_50'] - df['close']) 
+        df['ma200-price'] = (df['ma_200'] - df['close']) 
+
+        """
+        self.app.canvas.ax1.plot(df.index, df['close'], label='price', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['rsi'], label='rsi', color='green', alpha=0.5)
+        self.app.canvas.ax1.plot(df.index, df['ma_50'], label='ma_50', color='red', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['ma_200'], label='ma_200', color='white', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['ma50-price'], label='ma50-price', color='blue', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['ma50_incline'], label='ma50_incline', color='yellow', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['ma_50-ma_200'], label='ma_50-ma_200', color='pink', alpha=0.5)
+        self.app.canvas.draw()
+        self.app.show()
+        """
+
+        
+        #добавить показатель наклона скользящих средних
 
         df.dropna(inplace=True)
         return df
@@ -118,7 +144,7 @@ class AIManager:
 
         for i in range(n_candles, len(df)):
             # Входные данные: последние n_candles значений индикаторов
-            indicators = df[['rsi', 'atr', 'ma_50', 'ma_200', 'ma200-price']].iloc[i-n_candles:i].values
+            indicators = df[['rsi','atr','ma_50','ma_200','ma50-price','ma200-price']].iloc[i-n_candles:i].values
             X.append(indicators)
 
             # Выходные данные: направление сделки (order)
