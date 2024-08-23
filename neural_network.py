@@ -66,7 +66,8 @@ class AIManager:
         model = Sequential()
         model.add(Input(shape=input_shape))
         model.add(LSTM(64, return_sequences=True))
-        model.add(LSTM(32))
+        model.add(Dense(128, activation='relu'))
+        model.add(Dense(64, activation='relu'))
         model.add(Dense(32, activation='relu'))
         model.add(Dense(1))  # Три выхода: направление сделки, стоп-лосс и тейк-профит
 
@@ -74,9 +75,9 @@ class AIManager:
         return model
 
     def train_model(self):
-        epochs=50
+        epochs=100
         batch_size=1
-        lookback=1
+        lookback=10
 
         if not self.app.file_handler.load_candlesticks():
             return
@@ -182,7 +183,7 @@ class AIManager:
         self.app.canvas.draw()
         self.app.show()
         """
-        direction= self.predict_next_action(self.calculate_indicators(self.app.df, n_candles = 1))
+        direction= self.predict_next_action(self.calculate_indicators(self.app.df, n_candles = 10))
         print(f"Направление сделки: {direction}")
 
     

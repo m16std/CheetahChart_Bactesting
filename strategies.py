@@ -14,7 +14,7 @@ class StrategyManager:
         df['macd_signal'] = macd.macd_signal()
 
         # Рисуем индикаторы
-        self.app.canvas.ax2.plot(df.index, df['macd'], label='MACD', color='blue', linestyle='--', alpha = 0.5)
+        self.app.canvas.ax2.plot(df.index, df['macd'], label='MACD', color='yellow', linestyle='--', alpha = 0.5)
         self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='MACD Signal', color='orange', alpha = 0.5)
 
         transactions = []
@@ -60,20 +60,26 @@ class StrategyManager:
                     balance[1].append(df.index[i])  
 
             if not trade_open:
-                if df['macd'].iloc[i-1] > df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] < df['macd_signal'].iloc[i]:
+                if df['macd'].iloc[i-1] < df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] > df['macd_signal'].iloc[i]:
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    tp = open_price * (1+0.01*profit_percent)
-                    sl = open_price * (1-0.01*profit_percent/profit_factor)
+                    sl = 1000000
+                    for j in range (10):
+                        if sl > df['low'].iloc[i-j]:
+                            sl = df['low'].iloc[i-j]
+                    tp = (open_price - sl) * profit_factor + open_price
                     type = 1
                     trade_open = True
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i]) 
-                if df['macd'].iloc[i-1] < df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] > df['macd_signal'].iloc[i]:
+                if df['macd'].iloc[i-1] > df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] < df['macd_signal'].iloc[i]:
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    tp = open_price * (1-0.01*profit_percent)
-                    sl = open_price * (1+0.01*profit_percent/profit_factor)
+                    sl = 0
+                    for j in range (10):
+                        if sl < df['high'].iloc[i-j]:
+                            sl = df['high'].iloc[i-j]
+                    tp = open_price - (sl - open_price) * profit_factor
                     type = -1
                     trade_open = True
                     balance[0].append(current_balance)
@@ -90,7 +96,7 @@ class StrategyManager:
         df['macd_signal'] = macd.macd_signal()
 
         # Рисуем индикаторы
-        self.app.canvas.ax2.plot(df.index, df['macd'], label='MACD', color='blue', linestyle='--', alpha = 0.5)
+        self.app.canvas.ax2.plot(df.index, df['macd'], label='MACD', color='yellow', linestyle='--', alpha = 0.5)
         self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='MACD Signal', color='orange', alpha = 0.5)
 
         transactions = []
@@ -139,8 +145,11 @@ class StrategyManager:
                 if df['macd_signal'].iloc[i-1] < df['macd_signal'].iloc[i-2] and df['macd_signal'].iloc[i] > df['macd_signal'].iloc[i-1]:
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    tp = open_price * (1+0.01*profit_percent)
-                    sl = open_price * (1-0.01*profit_percent/profit_factor)
+                    sl = 1000000
+                    for j in range (10):
+                        if sl > df['low'].iloc[i-j]:
+                            sl = df['low'].iloc[i-j]
+                    tp = (open_price - sl) * profit_factor + open_price
                     type = 1
                     trade_open = True
                     balance[0].append(current_balance)
@@ -148,8 +157,11 @@ class StrategyManager:
                 if df['macd_signal'].iloc[i-1] > df['macd_signal'].iloc[i-2] and df['macd_signal'].iloc[i] < df['macd_signal'].iloc[i-1]:
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    tp = open_price * (1-0.01*profit_percent)
-                    sl = open_price * (1+0.01*profit_percent/profit_factor)
+                    sl = 0
+                    for j in range (10):
+                        if sl < df['high'].iloc[i-j]:
+                            sl = df['high'].iloc[i-j]
+                    tp = open_price - (sl - open_price) * profit_factor
                     type = -1
                     trade_open = True
                     balance[0].append(current_balance)
@@ -165,7 +177,7 @@ class StrategyManager:
         df['macd'] = macd.macd()
         df['macd_signal'] = macd.macd_signal()
 
-        self.app.canvas.ax2.plot(df.index, df['macd'], label='MACD', color='blue', linestyle='--', alpha = 0.5)
+        self.app.canvas.ax2.plot(df.index, df['macd'], label='MACD', color='yellow', linestyle='--', alpha = 0.5)
         self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='MACD Signal', color='orange', alpha = 0.5)
 
         transactions = []
@@ -243,13 +255,93 @@ class StrategyManager:
         balance[1].append(df.index[-1])
         return transactions, balance
 
+    def macd_vwap_strategy(self, df):
+
+        macd = ta.trend.MACD(df['close'])
+        df['macd'] = macd.macd()
+        df['macd_signal'] = macd.macd_signal()
+        vwap = ta.volume.VolumeWeightedAveragePrice(df['high'], df['low'], df['close'], df['volume'], window = 200)
+        df['vwap'] = vwap.vwap
+
+        # Рисуем индикаторы
+        self.app.canvas.ax2.plot(df.index, df['macd'], label='MACD', color='yellow', linestyle='--', alpha = 0.5)
+        self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='MACD Signal', color='orange', alpha = 0.5)
+        self.app.canvas.ax1.plot(df.index, df['vwap'], label='VWAP', color='white', linestyle='--', alpha = 0.5)
+
+        transactions = []
+        profit_factor = 1.5
+        profit_percent = 3
+        open_price = 0
+        open_time = 0
+        type = 1 # 1 - long, -1 - short
+        current_balance = 100
+        balance = [[],[]]
+        balance[0].append(current_balance)
+        balance[1].append(df.index[0])
+        position_size = 1
+        trade_open = False 
+        percent = int(len(df) / 50)
+
+        for i in range(len(df)):
+            if i % percent == 0:
+                self.app.bar.setValue(int(i / len(df) * 100))
+            if trade_open:
+                if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
+                    close_price = tp
+                    close_time = df.index[i]
+                    result = 1
+                    trade_open = False
+                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
+                    current_balance -= current_balance * position_size * 0.0008
+                    current_balance += current_balance*position_size*0.01*profit_percent
+                    balance[0].append(current_balance)
+                    balance[1].append(df.index[i])
+                elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
+                    close_price = sl
+                    close_time = df.index[i]
+                    result = 0
+                    trade_open = False
+                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
+                    current_balance -= current_balance * position_size * 0.0008
+                    current_balance -= current_balance*position_size*0.01*profit_percent/profit_factor
+                    balance[0].append(current_balance)
+                    balance[1].append(df.index[i])
+                else:
+                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type)
+                    balance[1].append(df.index[i])  
+
+            if not trade_open:
+                if (df['close'].iloc[i] > df['vwap'].iloc[i]) and df['macd'].iloc[i-1] < df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] > df['macd_signal'].iloc[i]:
+                    open_price = df['close'].iloc[i]
+                    open_time = df.index[i]
+                    sl = 1000000
+                    for j in range (10):
+                        if sl > df['low'].iloc[i-j]:
+                            sl = df['low'].iloc[i-j]
+                    tp = (open_price - sl) * profit_factor + open_price
+                    type = 1
+                    trade_open = True
+                    balance[0].append(current_balance)
+                    balance[1].append(df.index[i]) 
+                if (df['close'].iloc[i] < df['vwap'].iloc[i]) and df['macd'].iloc[i-1] > df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] < df['macd_signal'].iloc[i]:
+                    open_price = df['close'].iloc[i]
+                    open_time = df.index[i]
+                    sl = 0
+                    for j in range (10):
+                        if sl < df['high'].iloc[i-j]:
+                            sl = df['high'].iloc[i-j]
+                    tp = open_price - (sl - open_price) * profit_factor
+                    type = -1
+                    trade_open = True
+                    balance[0].append(current_balance)
+                    balance[1].append(df.index[i])
+
+        balance[0].append(current_balance)
+        balance[1].append(df.index[-1])
+        return transactions, balance
+
     def bollinger_vwap_strategy(self, df):
-        # Убедиться, что все данные числовые
-        df['high'] = pd.to_numeric(df['high'], errors='coerce')
-        df['low'] = pd.to_numeric(df['low'], errors='coerce')
-        df['close'] = pd.to_numeric(df['close'], errors='coerce')
-        df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
-        
+                
         bollinger = ta.volatility.BollingerBands(df['close'])
         df['bollinger_high'] = bollinger.bollinger_hband()
         df['bollinger_low'] = bollinger.bollinger_lband()
@@ -466,12 +558,23 @@ class StrategyManager:
         }, index=df.index)
 
     def supertrend_strategy(self, df):
-        period = 10
-        multiplier = 1
+        period = 12
+        multiplier = 3
 
         # Calculate SuperTrend
         sti = self.Supertrend(df, period, multiplier)
+        sti2 = self.Supertrend(df, 11, 2)
+        sti3 = self.Supertrend(df, 10, 1)
+
+        df2 = df
+        df3 = df
+        
         df = df.join(sti)
+        df2 = df2.join(sti2)
+        df3 = df3.join(sti3)
+
+
+        """
         macd = ta.trend.MACD(df['close'])
         df['macd'] = macd.macd()
         df['macd_signal'] = macd.macd_signal()
@@ -482,14 +585,19 @@ class StrategyManager:
         df['vwap'] = vwap.vwap
         
         # Рисуем индикаторы
-        #self.app.canvas.ax1.plot(df.index, df['bollinger_high'], label='BB High', color='white', alpha = 0.5)
-        #self.app.canvas.ax1.plot(df.index, df['bollinger_low'], label='BB Low', color='white', alpha = 0.5)
-        #self.app.canvas.ax1.plot(df.index, df['vwap'], label='VWAP', color='orange', linestyle='--', alpha = 0.5)
-        #self.app.canvas.ax2.plot(df.index, df['macd'], label='Macd', color='white', alpha = 0.5)
-        #self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='Macd signal', color='blue', alpha = 0.5)
-        #self.app.canvas.ax2.plot(df.index, df['Supertrend'], label='SuperTrend', color='yellow', linestyle='--', alpha=0.5)
-        self.app.canvas.ax1.plot(df.index, df['Final Lowerband'], label='Final Lowerband', color='green', linestyle='--', alpha=0.5)
-        self.app.canvas.ax1.plot(df.index, df['Final Upperband'], label='Final Upperband', color='red', linestyle='--', alpha=0.5)
+        self.app.canvas.ax1.plot(df.index, df['bollinger_high'], label='BB High', color='white', alpha = 0.5)
+        self.app.canvas.ax1.plot(df.index, df['bollinger_low'], label='BB Low', color='white', alpha = 0.5)
+        self.app.canvas.ax1.plot(df.index, df['vwap'], label='VWAP', color='orange', linestyle='--', alpha = 0.5)
+        self.app.canvas.ax2.plot(df.index, df['macd'], label='Macd', color='white', alpha = 0.5)
+        self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='Macd signal', color='blue', alpha = 0.5)
+        self.app.canvas.ax2.plot(df.index, df['Supertrend'], label='SuperTrend', color='yellow', linestyle='--', alpha=0.5)        
+        """
+        self.app.canvas.ax1.plot(df.index, df['Final Lowerband'], label='Final Lowerband 1', color='green', linestyle='--', alpha=0.5)
+        self.app.canvas.ax1.plot(df.index, df['Final Upperband'], label='Final Upperband 1', color='red', linestyle='--', alpha=0.5)
+        self.app.canvas.ax1.plot(df2.index, df2['Final Lowerband'], label='Final Lowerband 2', color='green', linestyle='--', alpha=0.5)
+        self.app.canvas.ax1.plot(df2.index, df2['Final Upperband'], label='Final Upperband 2', color='red', linestyle='--', alpha=0.5)
+        self.app.canvas.ax1.plot(df3.index, df3['Final Lowerband'], label='Final Lowerband 3', color='green', linestyle='--', alpha=0.5)
+        self.app.canvas.ax1.plot(df3.index, df3['Final Upperband'], label='Final Upperband 3', color='red', linestyle='--', alpha=0.5)
 
         transactions = []
         open_price = 0
@@ -508,7 +616,7 @@ class StrategyManager:
             if i % percent5 == 0:
                 self.app.bar.setValue(int(i / len(df) * 100))
             if trade_open:
-                if df['Supertrend'].iloc[i-1] != df['Supertrend'].iloc[i]:
+                if df['low'].iloc[i] < df['Final Lowerband'].iloc[i-1] and type == 1 or df['high'].iloc[i] > df['Final Upperband'].iloc[i-1] and type == -1:
                     if type == 1:
                         close_price = df['Final Lowerband'].iloc[i-1]
                     else:
@@ -531,7 +639,7 @@ class StrategyManager:
                     balance[1].append(df.index[i])
                     trade_open = False
                 else:
-                    balance[0].append(current_balance + current_balance * position_size * ((df['open'].iloc[i] + df['close'].iloc[i]) / 2 / open_price - 1) * type)
+                    balance[0].append(current_balance + current_balance * position_size * ((df['open'].iloc[i] + df['close'].iloc[i]) / 2 / open_price - 1) * type * leverage)
                     balance[1].append(df.index[i])
 
             if not trade_open:

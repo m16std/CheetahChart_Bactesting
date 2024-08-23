@@ -74,7 +74,7 @@ class CryptoTradingApp(QWidget):
         self.limit_input.setValue(1000)
 
         self.strat_input = QComboBox(self)
-        self.strat_input.addItems(['Supertrend', 'Supertrend stupid','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3'])
+        self.strat_input.addItems(['Supertrend', 'Supertrend stupid','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
 
         form_layout = QFormLayout()
         symbol_label = QtWidgets.QLabel('Symbol:')
@@ -145,8 +145,8 @@ class CryptoTradingApp(QWidget):
         self.show()
 
     def open_and_run(self):
-        self.file_handler.load_candlesticks()
-        self.run_strategy()
+        if self.file_handler.load_candlesticks():
+            self.run_strategy()
 
     def download_and_run(self):
         symbol = self.symbol_input.currentText()
@@ -172,6 +172,8 @@ class CryptoTradingApp(QWidget):
             self.current_strategy = self.strategy_manager.supertrend_stupid
         elif self.strat_input.currentText() == "MACD v3":
             self.current_strategy = self.strategy_manager.macd_v3_strategy
+        elif self.strat_input.currentText() == "MACD VWAP":
+            self.current_strategy = self.strategy_manager.macd_vwap_strategy
             
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
@@ -290,22 +292,26 @@ class CryptoTradingApp(QWidget):
                     ))
 
         self.bar.setValue(40)
-
+        """
         max_profit = 0.0
-        patch_count = 50
+        patch_count = 10
         step = int((len(balance[0])-1)/patch_count)
         for i in range (0, len(balance[0])-1-step, step):
             if abs((balance[0][i+step] - balance[0][i]) / balance[0][i]) > max_profit:
                         max_profit = abs((balance[0][i+step] - balance[0][i]) / balance[0][i])
 
-        for i in range (patch_count):
-            patch_color = '#089981' if (balance[0][i+step] - balance[0][i]) > 0 else '#F23645'
+        for i in range (8):
+            time_a = (balance[1][-1] - balance[1][0])/patch_count*i*0.99+balance[1][0]
+            time_b = (balance[1][-1] - balance[1][0])/patch_count*(i+1)*0.99+balance[1][0]
+            patch_color = '#089981' if balance[0][int(mdates.date2num(time_a))] > balance[0][int(mdates.date2num(time_b))] else '#F23645'
             self.canvas.ax3.add_patch(plt.Rectangle(
-                        (balance[1][i], min(balance[0])),
+                        (time_a, min(balance[0])),
                         (balance[1][-1] - balance[1][0])/patch_count,
-                        abs((balance[0][i+step] - balance[0][i]) / balance[0][i])/max_profit*max(balance[0]),
-                        color=patch_color, alpha=0.2
-                    ))
+                        abs((balance[0][i+step] - balance[0][i]) / balance[0][i])/max_profit*(max(balance[0])-min(balance[0])),
+                        color=patch_color, alpha=0.1
+                    ))        
+        """
+
 
         # Рисуем баланс
         index = 0 
