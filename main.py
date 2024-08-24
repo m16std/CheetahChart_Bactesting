@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt # type: ignore
 import matplotlib.dates as mdates # type: ignore
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # type: ignore
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar # type: ignore
+from matplotlib.backend_bases import MouseEvent
+from matplotlib.widgets import Cursor
 import qdarktheme # type: ignore
 import numpy as np # type: ignore
 
@@ -74,7 +76,7 @@ class CryptoTradingApp(QWidget):
         self.limit_input.setValue(1000)
 
         self.strat_input = QComboBox(self)
-        self.strat_input.addItems(['Supertrend', 'Supertrend stupid','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
+        self.strat_input.addItems(['Hawkes Process', 'Supertrend', 'Supertrend v2','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
 
         form_layout = QFormLayout()
         symbol_label = QtWidgets.QLabel('Symbol:')
@@ -168,12 +170,15 @@ class CryptoTradingApp(QWidget):
             self.current_strategy = self.strategy_manager.bollinger_v2
         elif self.strat_input.currentText() == "Supertrend":
             self.current_strategy = self.strategy_manager.supertrend_strategy
-        elif self.strat_input.currentText() == "Supertrend stupid":
-            self.current_strategy = self.strategy_manager.supertrend_stupid
+        elif self.strat_input.currentText() == "Supertrend v2":
+            self.current_strategy = self.strategy_manager.supertrend_v2
         elif self.strat_input.currentText() == "MACD v3":
             self.current_strategy = self.strategy_manager.macd_v3_strategy
         elif self.strat_input.currentText() == "MACD VWAP":
             self.current_strategy = self.strategy_manager.macd_vwap_strategy
+        elif self.strat_input.currentText() == "Hawkes Process":
+            self.current_strategy = self.strategy_manager.hawkes_process_strategy
+            
             
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
@@ -222,161 +227,164 @@ class CryptoTradingApp(QWidget):
         return data
 
     def plot_candlestick(self, df, transactions, balance):
-        wins = 0
-        losses = 0
-        winrate = 0
-        for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
-            if result == 1:
-                wins += 1
-            else:
-                losses += 1
-        if wins+losses == 0:
-            winrate = 0
-        else:
-            winrate = round(wins/(wins+losses)*100, ndigits=2)
-        profit = round((balance[0][-1]-balance[0][0])/balance[0][0]*100, ndigits=2)
-
 
         if len(df) <= 10000:
-            percent5 = int(len(df) / 20)
+                percent5 = int(len(df) / 20)
+                index = 0 
+                # Рисуем свечи
+                candlestick_data = zip(mdates.date2num(df.index.to_pydatetime()), df['open'], df['high'], df['low'], df['close'])
+                for date, open, high, low, close in candlestick_data:
+                    if index % percent5 == 0:
+                        self.bar.setValue(int(index / len(df) * 100))
+                    index += 1
+                    color = '#089981' if close >= open else '#F23645'
+                    self.canvas.ax1.plot([date, date], [low, high], color=color, linewidth=0.8)
+                    self.canvas.ax1.plot([date, date], [open, close], color=color, linewidth=2)
+
+        if len(balance[0]) > 0 and len(transactions) > 0:
+            wins = 0
+            losses = 0
+            winrate = 0
+            for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
+                if result == 1:
+                    wins += 1
+                else:
+                    losses += 1
+            if wins+losses == 0:
+                winrate = 0
+            else:
+                winrate = round(wins/(wins+losses)*100, ndigits=2)
+            profit = round((balance[0][-1]-balance[0][0])/balance[0][0]*100, ndigits=2)
+
+
+            if len(df) <= 10000:
+                self.bar.setValue(0)
+                # Рисуем сделки 
+                for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
+                    if type == 1:
+                        self.canvas.ax1.plot(mdates.date2num(open_time), open_price, marker='^', color='lime', markersize=7)
+                        self.canvas.ax1.plot(mdates.date2num(close_time), close_price, marker='X', color='salmon', markersize=7)
+                    if type == -1:
+                        self.canvas.ax1.plot(mdates.date2num(open_time), open_price, marker='v', color='salmon', markersize=7)
+                        self.canvas.ax1.plot(mdates.date2num(close_time), close_price, marker='X', color='lime', markersize=7)
+                self.bar.setValue(20)
+
+                # Рисуем области tp и sl 
+                for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
+                    if type == 1:
+                        self.canvas.ax1.add_patch(plt.Rectangle(
+                            (mdates.date2num(open_time), open_price),
+                            mdates.date2num(close_time) - mdates.date2num(open_time),
+                            tp - open_price,
+                            color='lightgreen', alpha=0.1
+                        ))
+                        self.canvas.ax1.add_patch(plt.Rectangle(
+                            (mdates.date2num(open_time), sl),
+                            mdates.date2num(close_time) - mdates.date2num(open_time),
+                            open_price - sl,
+                            color='salmon', alpha=0.1
+                        ))
+                    if type == -1:
+                        self.canvas.ax1.add_patch(plt.Rectangle(
+                            (mdates.date2num(open_time), open_price),
+                            mdates.date2num(close_time) - mdates.date2num(open_time),
+                            sl - open_price,
+                            color='salmon', alpha=0.1
+                        ))
+                        self.canvas.ax1.add_patch(plt.Rectangle(
+                            (mdates.date2num(open_time), tp),
+                            mdates.date2num(close_time) - mdates.date2num(open_time),
+                            open_price - tp,
+                            color='lightgreen', alpha=0.1
+                        ))
+
+            self.bar.setValue(40)
+            """
+            max_profit = 0.0
+            patch_count = 10
+            step = int((len(balance[0])-1)/patch_count)
+            for i in range (0, len(balance[0])-1-step, step):
+                if abs((balance[0][i+step] - balance[0][i]) / balance[0][i]) > max_profit:
+                            max_profit = abs((balance[0][i+step] - balance[0][i]) / balance[0][i])
+
+            for i in range (8):
+                time_a = (balance[1][-1] - balance[1][0])/patch_count*i*0.99+balance[1][0]
+                time_b = (balance[1][-1] - balance[1][0])/patch_count*(i+1)*0.99+balance[1][0]
+                patch_color = '#089981' if balance[0][int(mdates.date2num(time_a))] > balance[0][int(mdates.date2num(time_b))] else '#F23645'
+                self.canvas.ax3.add_patch(plt.Rectangle(
+                            (time_a, min(balance[0])),
+                            (balance[1][-1] - balance[1][0])/patch_count,
+                            abs((balance[0][i+step] - balance[0][i]) / balance[0][i])/max_profit*(max(balance[0])-min(balance[0])),
+                            color=patch_color, alpha=0.1
+                        ))        
+            """
+
+
+            # Рисуем баланс
             index = 0 
-            # Рисуем свечи
-            candlestick_data = zip(mdates.date2num(df.index.to_pydatetime()), df['open'], df['high'], df['low'], df['close'])
-            for date, open, high, low, close in candlestick_data:
-                if index % percent5 == 0:
-                    self.bar.setValue(int(index / len(df) * 100))
-                index += 1
-                color = '#089981' if close >= open else '#F23645'
-                self.canvas.ax1.plot([date, date], [low, high], color=color, linewidth=0.8)
-                self.canvas.ax1.plot([date, date], [open, close], color=color, linewidth=2)
+            if max(balance[0]) / min(balance[0]) < 4:
+                self.canvas.ax3.plot(balance[1], balance[0], label='Balance', color='#089981', linestyle='-')
+            else:
+                self.canvas.ax3.semilogy(balance[1], balance[0], label='Balance', color='#089981', linestyle='-')
+            NbData = len(balance[1])
+            MaxBL = [[MaxBL] * NbData for MaxBL in range(int(max(balance[0])+1))]
+            Max = [np.asarray(MaxBL[x]) for x in range(int(max(balance[0])+1))]
+            step = int((max(balance[0])-min(balance[0]))/20)
+            self.bar.setValue(60)
+            if step == 0:
+                step = 1
+            for x in range (int(balance[0][0]), int(max(balance[0])), step):
+                self.canvas.ax3.fill_between(balance[1], Max[x], balance[0], where=balance[0] >= Max[x], facecolor='#089981', alpha=0.05)
+            for x in range (int(min(balance[0])), int(balance[0][0]), step):
+                self.canvas.ax3.fill_between(balance[1], balance[0], Max[x], where=balance[0] <= Max[x], facecolor='#FF5045', alpha=0.05)
+            
 
-            self.bar.setValue(0)
-            # Рисуем сделки 
-            for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
-                if type == 1:
-                    self.canvas.ax1.plot(mdates.date2num(open_time), open_price, marker='^', color='lime', markersize=7)
-                    self.canvas.ax1.plot(mdates.date2num(close_time), close_price, marker='X', color='salmon', markersize=7)
-                if type == -1:
-                    self.canvas.ax1.plot(mdates.date2num(open_time), open_price, marker='v', color='salmon', markersize=7)
-                    self.canvas.ax1.plot(mdates.date2num(close_time), close_price, marker='X', color='lime', markersize=7)
-
-            self.bar.setValue(20)
-
-            # Рисуем области tp и sl 
-            for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
-                if type == 1:
-                    self.canvas.ax1.add_patch(plt.Rectangle(
-                        (mdates.date2num(open_time), open_price),
-                        mdates.date2num(close_time) - mdates.date2num(open_time),
-                        tp - open_price,
-                        color='lightgreen', alpha=0.1
-                    ))
-                    self.canvas.ax1.add_patch(plt.Rectangle(
-                        (mdates.date2num(open_time), sl),
-                        mdates.date2num(close_time) - mdates.date2num(open_time),
-                        open_price - sl,
-                        color='salmon', alpha=0.1
-                    ))
-                if type == -1:
-                    self.canvas.ax1.add_patch(plt.Rectangle(
-                        (mdates.date2num(open_time), open_price),
-                        mdates.date2num(close_time) - mdates.date2num(open_time),
-                        sl - open_price,
-                        color='salmon', alpha=0.1
-                    ))
-                    self.canvas.ax1.add_patch(plt.Rectangle(
-                        (mdates.date2num(open_time), tp),
-                        mdates.date2num(close_time) - mdates.date2num(open_time),
-                        open_price - tp,
-                        color='lightgreen', alpha=0.1
-                    ))
-
-        self.bar.setValue(40)
-        """
-        max_profit = 0.0
-        patch_count = 10
-        step = int((len(balance[0])-1)/patch_count)
-        for i in range (0, len(balance[0])-1-step, step):
-            if abs((balance[0][i+step] - balance[0][i]) / balance[0][i]) > max_profit:
-                        max_profit = abs((balance[0][i+step] - balance[0][i]) / balance[0][i])
-
-        for i in range (8):
-            time_a = (balance[1][-1] - balance[1][0])/patch_count*i*0.99+balance[1][0]
-            time_b = (balance[1][-1] - balance[1][0])/patch_count*(i+1)*0.99+balance[1][0]
-            patch_color = '#089981' if balance[0][int(mdates.date2num(time_a))] > balance[0][int(mdates.date2num(time_b))] else '#F23645'
-            self.canvas.ax3.add_patch(plt.Rectangle(
-                        (time_a, min(balance[0])),
-                        (balance[1][-1] - balance[1][0])/patch_count,
-                        abs((balance[0][i+step] - balance[0][i]) / balance[0][i])/max_profit*(max(balance[0])-min(balance[0])),
-                        color=patch_color, alpha=0.1
-                    ))        
-        """
+            max_drawdown = 0
+            max_balance = 0
+            self.bar.setValue(80)
+            for i in range(0, len(balance[0])):
+                if max_balance < balance[0][i]:
+                    max_balance = balance[0][i]
+                if (max_balance - balance[0][i]) * 100 / max_balance > max_drawdown:
+                    max_drawdown = (max_balance - balance[0][i]) * 100 / max_balance
 
 
-        # Рисуем баланс
-        index = 0 
-        if max(balance[0]) / min(balance[0]) < 4:
-            self.canvas.ax3.plot(balance[1], balance[0], label='Balance', color='#089981', linestyle='-')
-        else:
-            self.canvas.ax3.semilogy(balance[1], balance[0], label='Balance', color='#089981', linestyle='-')
-        NbData = len(balance[1])
-        MaxBL = [[MaxBL] * NbData for MaxBL in range(int(max(balance[0])+1))]
-        Max = [np.asarray(MaxBL[x]) for x in range(int(max(balance[0])+1))]
-        step = int((max(balance[0])-min(balance[0]))/20)
-        self.bar.setValue(60)
-        if step == 0:
-            step = 1
-        for x in range (int(balance[0][0]), int(max(balance[0])), step):
-            self.canvas.ax3.fill_between(balance[1], Max[x], balance[0], where=balance[0] >= Max[x], facecolor='#089981', alpha=0.05)
-        for x in range (int(min(balance[0])), int(balance[0][0]), step):
-            self.canvas.ax3.fill_between(balance[1], balance[0], Max[x], where=balance[0] <= Max[x], facecolor='#FF5045', alpha=0.05)
+            for label in self.canvas.ax3.get_yticklabels(which='both'):
+                label.set_color("white")
+
+            # Четкие надписи внизу графика цен
+            locator = mdates.AutoDateLocator()
+            formatter = mdates.ConciseDateFormatter(locator)
+            self.canvas.ax1.xaxis.set_major_locator(locator)
+            self.canvas.ax1.xaxis.set_major_formatter(formatter)
+
+            # Побочная инфа
+            text = dict()
+            transform = self.canvas.ax1.transAxes
+            textprops ={'size':'10'}
+            period = balance[1][-1] - balance[1][0]
+            period_days = f"{period.days} days"
+            text[0] = self.canvas.ax1.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[1] = self.canvas.ax1.text(0, -0.075, str(winrate)+'%', transform = transform, ha = 'left', color = '#089981', **textprops)
+            text[2] = self.canvas.ax1.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[3] = self.canvas.ax1.text(0.15, -0.075, str(profit)+'%', transform = transform, ha = 'left', color = '#089981', **textprops)
+            text[4] = self.canvas.ax1.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[5] = self.canvas.ax1.text(0.3, -0.075, str(wins+losses), transform = transform, ha = 'left', color = 'white', **textprops)
+            text[6] = self.canvas.ax1.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[7] = self.canvas.ax1.text(0.45, -0.075, period_days, transform = transform, ha = 'left', color = 'white', **textprops)
+            text[8] = self.canvas.ax1.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[9] = self.canvas.ax1.text(0.6, -0.075, str(balance[0][0])+' USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
+            text[10] = self.canvas.ax1.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[11] = self.canvas.ax1.text(0.75, -0.075, str(round(balance[0][-1], ndigits=1))+' USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
+            text[12] = self.canvas.ax1.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[13] = self.canvas.ax1.text(0.9, -0.075, str(round(max_drawdown, ndigits=1))+'%', transform = transform, ha = 'left', color = '#F23645', **textprops)
+            text[14] = self.canvas.ax1.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = 'white')
         
-
-        max_drawdown = 0
-        max_balance = 0
-        self.bar.setValue(80)
-        for i in range(0, len(balance[0])):
-            if max_balance < balance[0][i]:
-                max_balance = balance[0][i]
-            if (max_balance - balance[0][i]) * 100 / max_balance > max_drawdown:
-                max_drawdown = (max_balance - balance[0][i]) * 100 / max_balance
-
-
-        for label in self.canvas.ax3.get_yticklabels(which='both'):
-            label.set_color("white")
-
-        # Четкие надписи внизу графика цен
-        locator = mdates.AutoDateLocator()
-        formatter = mdates.ConciseDateFormatter(locator)
-        self.canvas.ax1.xaxis.set_major_locator(locator)
-        self.canvas.ax1.xaxis.set_major_formatter(formatter)
-
         # Легенды
         self.canvas.ax1.legend(loc='upper left', edgecolor='white') 
         self.canvas.ax2.legend(loc='upper right', edgecolor='white')
         self.canvas.ax3.legend(loc='upper left', edgecolor='white')
 
-        # Побочная инфа
-        text = dict()
-        transform = self.canvas.ax1.transAxes
-        textprops ={'size':'10'}
-        period = balance[1][-1] - balance[1][0]
-        period_days = f"{period.days} days"
-        text[0] = self.canvas.ax1.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[1] = self.canvas.ax1.text(0, -0.075, str(winrate)+'%', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[2] = self.canvas.ax1.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[3] = self.canvas.ax1.text(0.15, -0.075, str(profit)+'%', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[4] = self.canvas.ax1.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[5] = self.canvas.ax1.text(0.3, -0.075, str(wins+losses), transform = transform, ha = 'left', color = 'white', **textprops)
-        text[6] = self.canvas.ax1.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[7] = self.canvas.ax1.text(0.45, -0.075, period_days, transform = transform, ha = 'left', color = 'white', **textprops)
-        text[8] = self.canvas.ax1.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[9] = self.canvas.ax1.text(0.6, -0.075, str(balance[0][0])+' USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[10] = self.canvas.ax1.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[11] = self.canvas.ax1.text(0.75, -0.075, str(round(balance[0][-1], ndigits=1))+' USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[12] = self.canvas.ax1.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[13] = self.canvas.ax1.text(0.9, -0.075, str(round(max_drawdown, ndigits=1))+'%', transform = transform, ha = 'left', color = '#F23645', **textprops)
-        text[14] = self.canvas.ax1.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = 'white')
         self.bar.setValue(100)
         self.canvas.draw()
         self.show()

@@ -7,6 +7,96 @@ class StrategyManager:
     def __init__(self, app):
         self.app = app
 
+    def close(self, balance, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, close_time, type, tp, sl, commission):
+        
+        if (close_price > open_price and type == 1) or (close_price < open_price and type == -1):
+            result = 1
+        else:
+            result = 0
+        
+        if type == 1:
+            transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
+            current_balance -= current_balance * position_size * commission * leverage
+            current_balance += current_balance*position_size*(close_price-open_price)/open_price * leverage
+            balance[0].append(current_balance)
+            balance[1].append(close_time)
+            
+        if type == -1:
+            transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
+            current_balance -= current_balance * position_size * commission * leverage 
+            current_balance += current_balance*position_size*(open_price - close_price)/open_price * leverage 
+            balance[0].append(current_balance)
+            balance[1].append(close_time)
+
+        return transactions, balance, current_balance
+    
+    def get_tp_sl(self, df, i, open_price, profit_factor, type, lookback):
+        if type == 1:
+            sl = 1000000
+            for j in range (lookback):
+                if sl > df['low'].iloc[i-j]:
+                    sl = df['low'].iloc[i-j]
+            tp = (open_price - sl) * profit_factor + open_price
+        if type == -1:
+            sl = 0
+            for j in range (lookback):
+                if sl < df['high'].iloc[i-j]:
+                    sl = df['high'].iloc[i-j]
+            tp = open_price - (sl - open_price) * profit_factor
+        return tp, sl
+
+    def Supertrend(self, df, atr_period, multiplier):
+        high = df['high']
+        low = df['low']
+        close = df['close']
+        
+        # calculate ATR
+        price_diffs = [high - low, 
+                    high - close.shift(), 
+                    close.shift() - low]
+        true_range = pd.concat(price_diffs, axis=1)
+        true_range = true_range.abs().max(axis=1)
+        atr = true_range.ewm(alpha=1/atr_period,min_periods=atr_period).mean() 
+
+        hl2 = (high + low) / 2
+        final_upperband = hl2 + (multiplier * atr)
+        final_lowerband = hl2 - (multiplier * atr)
+        
+        # initialize Supertrend column to True
+        supertrend = [True] * len(df)
+        
+        for i in range(1, len(df.index)):
+            
+            # if current close price crosses above upperband
+            if close.iloc[i] > final_upperband.iloc[i-1]:
+                supertrend[i] = True
+            # if current close price crosses below lowerband
+            elif close.iloc[i] < final_lowerband.iloc[i-1]: 
+                supertrend[i] = False
+            # else, the trend continues
+            else:
+                supertrend[i] = supertrend[i-1]
+                
+                # adjustment to the final bands
+                if supertrend[i] == True and final_lowerband.iloc[i] < final_lowerband.iloc[i-1]:
+                    final_lowerband.iloc[i] = final_lowerband.iloc[i-1]
+                if supertrend[i] == False and final_upperband.iloc[i] > final_upperband.iloc[i-1]:
+                    final_upperband.iloc[i] = final_upperband.iloc[i-1]
+
+            # to remove bands according to the trend direction
+            if supertrend[i] == True:
+                final_upperband.iloc[i] = np.nan
+            else:
+                final_lowerband.iloc[i] = np.nan
+        
+        return pd.DataFrame({
+            'Supertrend': supertrend,
+            'Final Lowerband': final_lowerband,
+            'Final Upperband': final_upperband
+        }, index=df.index)
+
+
+
     def macd_strategy(self, df):
 
         macd = ta.trend.MACD(df['close'])
@@ -28,6 +118,7 @@ class StrategyManager:
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
         position_size = 1
+        leverage = 2
         trade_open = False 
         percent = int(len(df) / 50)
 
@@ -36,51 +127,31 @@ class StrategyManager:
                 self.app.bar.setValue(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    close_price = tp
-                    close_time = df.index[i]
-                    result = 1
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
                     trade_open = False
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    current_balance -= current_balance * position_size * 0.0008
-                    current_balance += current_balance*position_size*0.01*profit_percent
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
+                    
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    close_price = sl
-                    close_time = df.index[i]
-                    result = 0
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
                     trade_open = False
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    current_balance -= current_balance * position_size * 0.0008
-                    current_balance -= current_balance*position_size*0.01*profit_percent/profit_factor
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
+
                 else:
-                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type)
+                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type*leverage)
                     balance[1].append(df.index[i])  
 
             if not trade_open:
                 if df['macd'].iloc[i-1] < df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] > df['macd_signal'].iloc[i]:
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    sl = 1000000
-                    for j in range (10):
-                        if sl > df['low'].iloc[i-j]:
-                            sl = df['low'].iloc[i-j]
-                    tp = (open_price - sl) * profit_factor + open_price
                     type = 1
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
                     trade_open = True
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i]) 
                 if df['macd'].iloc[i-1] > df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] < df['macd_signal'].iloc[i]:
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    sl = 0
-                    for j in range (10):
-                        if sl < df['high'].iloc[i-j]:
-                            sl = df['high'].iloc[i-j]
-                    tp = open_price - (sl - open_price) * profit_factor
                     type = -1
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
                     trade_open = True
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i])
@@ -124,7 +195,7 @@ class StrategyManager:
                     trade_open = False
                     transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
                     current_balance -= current_balance * position_size * 0.0008
-                    current_balance += current_balance*position_size*0.01*profit_percent
+                    current_balance += current_balance*position_size*(close_price-open_price)/open_price
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i])
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
@@ -134,7 +205,7 @@ class StrategyManager:
                     trade_open = False
                     transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
                     current_balance -= current_balance * position_size * 0.0008
-                    current_balance -= current_balance*position_size*0.01*profit_percent/profit_factor
+                    current_balance -= current_balance*position_size*(close_price - open_price)/open_price
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i])
                 else:
@@ -270,7 +341,6 @@ class StrategyManager:
 
         transactions = []
         profit_factor = 1.5
-        profit_percent = 3
         open_price = 0
         open_time = 0
         type = 1 # 1 - long, -1 - short
@@ -279,6 +349,7 @@ class StrategyManager:
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
         position_size = 1
+        leverage = 2
         trade_open = False 
         percent = int(len(df) / 50)
 
@@ -287,51 +358,29 @@ class StrategyManager:
                 self.app.bar.setValue(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    close_price = tp
-                    close_time = df.index[i]
-                    result = 1
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
                     trade_open = False
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    current_balance -= current_balance * position_size * 0.0008
-                    current_balance += current_balance*position_size*0.01*profit_percent
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    close_price = sl
-                    close_time = df.index[i]
-                    result = 0
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
                     trade_open = False
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    current_balance -= current_balance * position_size * 0.0008
-                    current_balance -= current_balance*position_size*0.01*profit_percent/profit_factor
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
                 else:
-                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type)
+                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type*leverage)
                     balance[1].append(df.index[i])  
 
             if not trade_open:
                 if (df['close'].iloc[i] > df['vwap'].iloc[i]) and df['macd'].iloc[i-1] < df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] > df['macd_signal'].iloc[i]:
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    sl = 1000000
-                    for j in range (10):
-                        if sl > df['low'].iloc[i-j]:
-                            sl = df['low'].iloc[i-j]
-                    tp = (open_price - sl) * profit_factor + open_price
                     type = 1
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
                     trade_open = True
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i]) 
                 if (df['close'].iloc[i] < df['vwap'].iloc[i]) and df['macd'].iloc[i-1] > df['macd_signal'].iloc[i-1] and df['macd'].iloc[i] < df['macd_signal'].iloc[i]:
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    sl = 0
-                    for j in range (10):
-                        if sl < df['high'].iloc[i-j]:
-                            sl = df['high'].iloc[i-j]
-                    tp = open_price - (sl - open_price) * profit_factor
                     type = -1
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
                     trade_open = True
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i])
@@ -363,7 +412,7 @@ class StrategyManager:
         open_price = 0
         open_time = 0
         profit_factor = 1.5
-        profit_percent = 1
+        leverage = 2
         tp = 0
         sl = 0
         type = 0  # 1 - long, -1 - short
@@ -374,36 +423,21 @@ class StrategyManager:
                 self.app.bar.setValue(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    close_price = tp
-                    close_time = df.index[i]
-                    result = 1
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
                     trade_open = False
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    current_balance -= current_balance * position_size * 0.0008
-                    current_balance = current_balance+current_balance*position_size*0.01*profit_percent
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    close_price = sl
-                    close_time = df.index[i]
-                    result = 0
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
                     trade_open = False
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    current_balance -= current_balance * position_size * 0.0008
-                    current_balance = current_balance-current_balance*position_size*0.01*profit_percent/profit_factor
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
                 else:
-                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type)
+                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type*leverage)
                     balance[1].append(df.index[i])  
             else:
                 if (df['close'].iloc[i] < df['bollinger_low'].iloc[i]) and \
                 (df['close'].iloc[i-15:i] > df['vwap'].iloc[i-15:i]).all():
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    tp = open_price * (1+0.01*profit_percent)
-                    sl = open_price * (1-0.01*profit_percent/profit_factor)
                     type = 1  # long
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
                     trade_open = True
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i])
@@ -412,9 +446,8 @@ class StrategyManager:
                     (df['close'].iloc[i-15:i] < df['vwap'].iloc[i-15:i]).all():
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    tp = open_price * (1-0.01*profit_percent)
-                    sl = open_price * (1+0.01*profit_percent/profit_factor)
                     type = -1  # short
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
                     trade_open = True
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i])
@@ -449,7 +482,7 @@ class StrategyManager:
         open_price = 0
         open_time = 0
         profit_factor = 1.5
-        profit_percent = 1
+        leverage = 2
         tp = 0
         sl = 0
         type = 0  # 1 - long, -1 - short
@@ -460,35 +493,20 @@ class StrategyManager:
                 self.app.bar.setValue(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    close_price = tp
-                    close_time = df.index[i]
-                    result = 1
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
                     trade_open = False
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    current_balance -= current_balance * position_size * 0.0008
-                    current_balance = current_balance+current_balance*position_size*0.01*profit_percent
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    close_price = sl
-                    close_time = df.index[i]
-                    result = 0
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
                     trade_open = False
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    current_balance -= current_balance * position_size * 0.0008
-                    current_balance = current_balance-current_balance*position_size*0.01*profit_percent/profit_factor
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
                 else:
-                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type)
-                    balance[1].append(df.index[i])  
+                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type*leverage)
+                    balance[1].append(df.index[i])   
             else:
                 if (df['low'].iloc[i] < df['bollinger_low'].iloc[i]) and (df['close'].iloc[i] > df['open'].iloc[i]):
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    tp = open_price * (1+0.01*profit_percent)
-                    sl = open_price * (1-0.01*profit_percent/profit_factor)
                     type = 1  # long
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
                     trade_open = True
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i])
@@ -496,9 +514,8 @@ class StrategyManager:
                 if (df['high'].iloc[i] > df['bollinger_high'].iloc[i]) and (df['close'].iloc[i] < df['open'].iloc[i]):
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
-                    tp = open_price * (1-0.01*profit_percent)
-                    sl = open_price * (1+0.01*profit_percent/profit_factor)
                     type = -1  # short
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
                     trade_open = True
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i])
@@ -507,57 +524,7 @@ class StrategyManager:
         balance[1].append(df.index[-1])
         return transactions, balance
     
-    def Supertrend(self, df, atr_period, multiplier):
-        high = df['high']
-        low = df['low']
-        close = df['close']
-        
-        # calculate ATR
-        price_diffs = [high - low, 
-                    high - close.shift(), 
-                    close.shift() - low]
-        true_range = pd.concat(price_diffs, axis=1)
-        true_range = true_range.abs().max(axis=1)
-        atr = true_range.ewm(alpha=1/atr_period,min_periods=atr_period).mean() 
-
-        hl2 = (high + low) / 2
-        final_upperband = upperband = hl2 + (multiplier * atr)
-        final_lowerband = lowerband = hl2 - (multiplier * atr)
-        
-        # initialize Supertrend column to True
-        supertrend = [True] * len(df)
-        
-        for i in range(1, len(df.index)):
-            
-            # if current close price crosses above upperband
-            if close.iloc[i] > final_upperband.iloc[i-1]:
-                supertrend[i] = True
-            # if current close price crosses below lowerband
-            elif close.iloc[i] < final_lowerband.iloc[i-1]: 
-                supertrend[i] = False
-            # else, the trend continues
-            else:
-                supertrend[i] = supertrend[i-1]
-                
-                # adjustment to the final bands
-                if supertrend[i] == True and final_lowerband.iloc[i] < final_lowerband.iloc[i-1]:
-                    final_lowerband.iloc[i] = final_lowerband.iloc[i-1]
-                if supertrend[i] == False and final_upperband.iloc[i] > final_upperband.iloc[i-1]:
-                    final_upperband.iloc[i] = final_upperband.iloc[i-1]
-
-            # to remove bands according to the trend direction
-            if supertrend[i] == True:
-                final_upperband.iloc[i] = np.nan
-            else:
-                final_lowerband.iloc[i] = np.nan
-        
-        return pd.DataFrame({
-            'Supertrend': supertrend,
-            'Final Lowerband': final_lowerband,
-            'Final Upperband': final_upperband
-        }, index=df.index)
-
-    def supertrend_strategy(self, df):
+    def supertrend_v2(self, df):
         period = 12
         multiplier = 3
 
@@ -621,22 +588,7 @@ class StrategyManager:
                         close_price = df['Final Lowerband'].iloc[i-1]
                     else:
                         close_price = df['Final Upperband'].iloc[i-1]
-                    close_time = df.index[i]
-                    result = 1 if (type == 1 and close_price > open_price) or \
-                                (type == -1 and close_price < open_price) else 0
-                    if result == 1:
-                        tp = close_price
-                        sl = open_price
-                        current_balance -= current_balance * position_size * leverage * 0.0008
-                        current_balance += current_balance * position_size * abs((close_price - open_price) / open_price) * leverage
-                    else:
-                        tp = open_price
-                        sl = close_price
-                        current_balance -= current_balance * position_size * leverage * 0.0008
-                        current_balance -= current_balance * position_size * abs((close_price - open_price) / open_price) * leverage
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, df.index[i], type, close_price, open_price, 0.0008)
                     trade_open = False
                 else:
                     balance[0].append(current_balance + current_balance * position_size * ((df['open'].iloc[i] + df['close'].iloc[i]) / 2 / open_price - 1) * type * leverage)
@@ -687,7 +639,7 @@ class StrategyManager:
 
         return transactions, balance
     
-    def supertrend_stupid(self, df):
+    def supertrend_strategy(self, df):
         period = 10
         multiplier = 1
 
@@ -711,40 +663,24 @@ class StrategyManager:
         transactions = []
         open_price = 0
         open_time = 0
-        type = 1  # 1 - long, -1 - short
+        type = 1
         current_balance = 100
-        balance = [[], []]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
         position_size = 1
+        leverage = 2
         trade_open = False
-        percent5 = int(len(df) / 50)
+        balance = [[current_balance], [df.index[0]]]
+        percent = int(len(df) / 50)
 
         for i in range(len(df)):
-            if i % percent5 == 0:
+            if i % percent == 0:
                 self.app.bar.setValue(int(i / len(df) * 100))
             if trade_open:
                 if df['Supertrend'].iloc[i-1] != df['Supertrend'].iloc[i]:
-                    close_price = df['close'].iloc[i]
-                    close_time = df.index[i]
-                    result = 1 if (type == 1 and close_price > open_price) or \
-                                (type == -1 and close_price < open_price) else 0
-                    if result == 1:
-                        tp = close_price
-                        sl = open_price
-                        current_balance -= current_balance * position_size * 0.0008
-                        current_balance += current_balance * position_size * abs((close_price - open_price) / open_price)
-                    else:
-                        tp = open_price
-                        sl = close_price
-                        current_balance -= current_balance * position_size * 0.0008
-                        current_balance -= current_balance * position_size * abs((close_price - open_price) / open_price)
-                    transactions.append((tp, sl, open_price, open_time, close_time, close_price, type, result))
-                    balance[0].append(current_balance)
-                    balance[1].append(df.index[i])
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, df['close'].iloc[i], df.index[i], type, df['close'].iloc[i], open_price, 0.0008)
+                    trade_open = False
                     trade_open = False
                 else:
-                    balance[0].append(current_balance + current_balance * position_size * ((df['open'].iloc[i] + df['close'].iloc[i]) / 2 / open_price - 1) * type)
+                    balance[0].append(current_balance + current_balance * position_size * ((df['open'].iloc[i] + df['close'].iloc[i]) / 2 / open_price - 1) * type * leverage)
                     balance[1].append(df.index[i])
 
             if not trade_open:
@@ -789,5 +725,87 @@ class StrategyManager:
         print(str('Winrate: ' + str(winrate)))
         print(str('Trades: ' + str(wins+losses)+'\n'))
         """
+
+        return transactions, balance
+
+    def hawkes_process_strategy(self, df):
+
+        lookback = 168
+        df['atr'] = ta.volatility.AverageTrueRange(df['high'], df['low'], df['close'], window=lookback, fillna=False).average_true_range()
+        df['norm_range'] = (df['high'] - df['low']) / df['atr']
+        #self.app.canvas.ax2.plot(df.index, df['norm_range'], label='norm_range', color='white', alpha=0.5)
+
+        kappa = 0.1
+        alpha = np.exp(-kappa)
+        df['hawkes'] = df['norm_range']
+
+        for i in range(lookback, len(df)):
+            df['hawkes'].iloc[i] += df['hawkes'].iloc[i-1] * alpha
+        df['hawkes'] *= kappa
+
+        #self.app.canvas.ax2.plot(df.index, df['norm_range'], label='norm_range', color='white', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['hawkes'], label='hawkes', color='yellow', alpha=0.5)
+        
+        df['q05'] = df['hawkes'].rolling(lookback).quantile(0.05)
+        df['q95'] = df['hawkes'].rolling(lookback).quantile(0.95)
+
+        vwap = ta.volume.VolumeWeightedAveragePrice(df['high'], df['low'], df['close'], df['volume'], window = 200)
+        df['vwap'] = vwap.vwap
+        
+        self.app.canvas.ax1.plot(df.index, df['vwap'], label='VWAP', color='orange', linestyle='--', alpha = 0.5)
+
+        self.app.canvas.ax2.plot(df.index, df['q05'], label='q05', color='red', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['q95'], label='q95', color='green', alpha=0.5)
+
+        transactions = []
+        open_price = 0
+        open_time = 0
+        type = 1
+        current_balance = 100
+        position_size = 1
+        leverage = 2
+        profit_factor = 1.4
+        was_below = 0
+        trade_open = False
+        balance = [[current_balance], [df.index[0]]]
+        percent = int(len(df) / 50)
+
+        for i in range(len(df)):
+            if i % percent == 0:
+                self.app.bar.setValue(int(i / len(df) * 100))
+            if trade_open:
+                if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
+                    was_below = 0
+                    trade_open = False
+                elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
+                    was_below = 0
+                    trade_open = False
+                else:
+                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type* leverage)
+                    balance[1].append(df.index[i])  
+
+            if was_below > 0 and not trade_open:
+                if df['hawkes'].iloc[i] >= df['q95'].iloc[i] and df['close'].iloc[was_below] < df['close'].iloc[i]:
+                    open_price = df['close'].iloc[i]
+                    open_time = df.index[i]
+                    type = 1
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
+                    trade_open = True
+                    balance[0].append(current_balance)
+                    balance[1].append(df.index[i]) 
+                if df['hawkes'].iloc[i] >= df['q95'].iloc[i] and df['close'].iloc[was_below] > df['close'].iloc[i]:
+                    open_price = df['close'].iloc[i]
+                    open_time = df.index[i]
+                    type = -1
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
+                    trade_open = True
+                    balance[0].append(current_balance)
+                    balance[1].append(df.index[i])
+                    
+            if not trade_open:
+                if df['hawkes'].iloc[i] < df['q05'].iloc[i]:
+                   was_below = i
 
         return transactions, balance
