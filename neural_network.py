@@ -113,6 +113,7 @@ class AIManager:
         direction = prediction[0]  # Направление сделки
 
         return direction
+    
     def calculate_indicators(self, df):
         df['rsi'] = ta.momentum.RSIIndicator(df['close'], window=14).rsi()
         df['atr'] = ta.volatility.AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()

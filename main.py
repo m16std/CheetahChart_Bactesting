@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt # type: ignore
 import matplotlib.dates as mdates # type: ignore
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # type: ignore
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar # type: ignore
-from matplotlib.backend_bases import MouseEvent
-from matplotlib.widgets import Cursor
 import qdarktheme # type: ignore
 import numpy as np # type: ignore
 
@@ -39,10 +37,6 @@ class MplCanvas(FigureCanvas):
             tick.set_color('white')
         for tick in self.ax3.get_yticklabels():
             tick.set_color('white')
-
-        # Рисуем линии на фоне
-        self.ax1.grid(True, axis='both', linewidth=0.3, color='gray')
-        self.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
 
         plt.subplots_adjust(left=0.04, bottom=0.03, right=1, top=1, hspace=0.12)
         super(MplCanvas, self).__init__(fig)
@@ -76,7 +70,7 @@ class CryptoTradingApp(QWidget):
         self.limit_input.setValue(1000)
 
         self.strat_input = QComboBox(self)
-        self.strat_input.addItems(['Hawkes Process', 'Supertrend', 'Supertrend v2','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
+        self.strat_input.addItems(['DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Supertrend v2','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
 
         form_layout = QFormLayout()
         symbol_label = QtWidgets.QLabel('Symbol:')
@@ -178,6 +172,10 @@ class CryptoTradingApp(QWidget):
             self.current_strategy = self.strategy_manager.macd_vwap_strategy
         elif self.strat_input.currentText() == "Hawkes Process":
             self.current_strategy = self.strategy_manager.hawkes_process_strategy
+        elif self.strat_input.currentText() == "Supertrend v3 SOLANA 1H SETUP":
+            self.current_strategy = self.strategy_manager.supertrend_v3
+        if self.strat_input.currentText() == "DCA":
+            self.current_strategy = self.strategy_manager.dca_strategy
             
             
         self.canvas.ax1.clear()
@@ -227,6 +225,10 @@ class CryptoTradingApp(QWidget):
         return data
 
     def plot_candlestick(self, df, transactions, balance):
+
+        # Рисуем линии на фоне
+        self.canvas.ax1.grid(True, axis='both', linewidth=0.3, color='gray')
+        self.canvas.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
 
         if len(df) <= 10000:
                 percent5 = int(len(df) / 20)
@@ -330,14 +332,17 @@ class CryptoTradingApp(QWidget):
             MaxBL = [[MaxBL] * NbData for MaxBL in range(int(max(balance[0])+1))]
             Max = [np.asarray(MaxBL[x]) for x in range(int(max(balance[0])+1))]
             step = int((max(balance[0])-min(balance[0]))/20)
-            self.bar.setValue(60)
-            if step == 0:
-                step = 1
-            for x in range (int(balance[0][0]), int(max(balance[0])), step):
-                self.canvas.ax3.fill_between(balance[1], Max[x], balance[0], where=balance[0] >= Max[x], facecolor='#089981', alpha=0.05)
-            for x in range (int(min(balance[0])), int(balance[0][0]), step):
-                self.canvas.ax3.fill_between(balance[1], balance[0], Max[x], where=balance[0] <= Max[x], facecolor='#FF5045', alpha=0.05)
             
+            self.bar.setValue(60)
+            try:
+                if step == 0:
+                    step = 1
+                for x in range (int(balance[0][0]), int(max(balance[0])), step):
+                    self.canvas.ax3.fill_between(balance[1], Max[x], balance[0], where=balance[0] >= Max[x], facecolor='#089981', alpha=0.05)
+                for x in range (int(min(balance[0])), int(balance[0][0]), step):
+                    self.canvas.ax3.fill_between(balance[1], balance[0], Max[x], where=balance[0] <= Max[x], facecolor='#FF5045', alpha=0.05)
+            except:
+                print('че-то не так')    
 
             max_drawdown = 0
             max_balance = 0
