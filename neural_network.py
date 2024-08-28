@@ -66,18 +66,17 @@ class AIManager:
         model = Sequential()
         model.add(Input(shape=input_shape))
         model.add(LSTM(64, return_sequences=True))
-        model.add(Dense(128, activation='relu'))
         model.add(Dense(64, activation='relu'))
         model.add(Dense(32, activation='relu'))
-        model.add(Dense(1))  # Три выхода: направление сделки, стоп-лосс и тейк-профит
+        model.add(Dense(1)) 
 
         model.compile(optimizer='adam', loss='mean_squared_error')
         return model
 
     def train_model(self):
-        epochs=100
+        epochs=50
         batch_size=1
-        lookback=10
+        lookback=5
 
         if not self.app.file_handler.load_candlesticks():
             return
@@ -88,23 +87,29 @@ class AIManager:
         print('Рассчет сделок для обучения')
         self.app.df = self.calculate_best_trades(self.app.df, lookahead=2, min_movement=1)
 
-        print('Сортировка данных')
-        X, y = self.prepare_training_data(self.app.df, n_candles=lookback)
+        print(self.app.df['order'])
 
-        input_shape = (lookback, 6)
+        print('Сортировка данных')
+        x, y = self.prepare_training_data(self.app.df, n_candles=lookback)
+
+        input_shape = (lookback, 5)
         self.app.model = self.create_lstm_model(input_shape)     
 
         print('Обучение нейронки')
-        history = self.app.model.fit(X, y, epochs=epochs, batch_size=batch_size, validation_split=0.2, verbose=1)
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+        history = self.app.model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(x_test,y_test), verbose=1)
 
         self.app.file_handler.save_model_dialog()
+
+        direction= self.predict_next_action(self.app.df, n_candles = 5)
+        print(f"Направление сделки: {direction}")
 
     def predict(self, X):
         return self.app.model.predict(X)
     
     def predict_next_action(self, df, n_candles):
         # Рассчитываем индикаторы для последних n_candles
-        indicators = df[['rsi','atr','ma_50','ma_200','ma50-price','ma200-price']].iloc[-n_candles:].values
+        indicators = df[['rsi','atr','ma_50','ma_200', 'ma_div']].iloc[-n_candles:].values
         indicators = indicators.reshape(1, n_candles, indicators.shape[1])
 
         # Прогнозируем направление сделки, стоп-лосс и тейк-профит
@@ -117,11 +122,19 @@ class AIManager:
     def calculate_indicators(self, df):
         df['rsi'] = ta.momentum.RSIIndicator(df['close'], window=14).rsi()
         df['atr'] = ta.volatility.AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
-        df['ma_50'] = df['close'].rolling(window=50).mean() 
-        df['ma_200'] = df['close'].rolling(window=200).mean()
-        df['ma50-price'] = (df['ma_50'] - df['close']) 
-        df['ma200-price'] = (df['ma_200'] - df['close']) 
+        df['ma_50'] = (df['close'].rolling(window=50, closed='right').mean() / df['close'].rolling(window=50, closed='left').mean() - 1)  * 50
+        df['ma_200'] = (df['close'].rolling(window=200, closed='right').mean() / df['close'].rolling(window=200, closed='left').mean() - 1) * 200
+        df['ma_div'] = (df['close'].rolling(window=200).mean() / df['close'].rolling(window=50).mean() - 1)  * 2
+        
+        df['ma50'] = df['close'].rolling(window=50).mean()
+        df['ma200'] = df['close'].rolling(window=200).mean()
 
+        self.app.canvas.ax1.plot(df.index, df['close'], label='price', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['ma_50'], label='ma_50', color='red', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['ma_200'], label='ma_200', color='white', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['ma_div'], label='ma_div', color='yellow', alpha=0.5)
+        self.app.canvas.ax1.plot(df.index, df['ma50'], label='ma50', color='green', alpha=0.5)
+        self.app.canvas.ax1.plot(df.index, df['ma200'], label='ma200', color='green', alpha=0.5)
         """
         self.app.canvas.ax1.plot(df.index, df['close'], label='price', alpha=0.5)
         self.app.canvas.ax2.plot(df.index, df['rsi'], label='rsi', color='green', alpha=0.5)
@@ -130,10 +143,9 @@ class AIManager:
         self.app.canvas.ax2.plot(df.index, df['ma50-price'], label='ma50-price', color='blue', alpha=0.5)
         self.app.canvas.ax2.plot(df.index, df['ma50_incline'], label='ma50_incline', color='yellow', alpha=0.5)
         self.app.canvas.ax2.plot(df.index, df['ma_50-ma_200'], label='ma_50-ma_200', color='pink', alpha=0.5)
+        """
         self.app.canvas.draw()
         self.app.show()
-        """
-
         
         #добавить показатель наклона скользящих средних
 
@@ -146,7 +158,7 @@ class AIManager:
 
         for i in range(n_candles, len(df)):
             # Входные данные: последние n_candles значений индикаторов
-            indicators = df[['rsi','atr','ma_50','ma_200','ma50-price','ma200-price']].iloc[i-n_candles:i].values
+            indicators = df[['rsi','atr','ma_50','ma_200', 'ma_div']].iloc[i-n_candles:i].values
             X.append(indicators)
 
             # Выходные данные: направление сделки (order)
@@ -184,12 +196,11 @@ class AIManager:
         self.app.canvas.draw()
         self.app.show()
         """
-        direction= self.predict_next_action(self.calculate_indicators(self.app.df, n_candles = 10))
+        direction= self.predict_next_action(self.calculate_indicators(self.app.df), n_candles = 5)
         print(f"Направление сделки: {direction}")
 
     
     def run_ai(self):
-        a = self.app.file_handler.load_model_dialog()
-        b = self.app.file_handler.load_candlesticks()
-        if a * b == True:
-            self.strategy_with_lstm()
+        if self.app.file_handler.load_model_dialog():
+            if self.app.file_handler.load_candlesticks():
+                self.strategy_with_lstm()

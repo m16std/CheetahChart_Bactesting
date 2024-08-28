@@ -70,7 +70,7 @@ class CryptoTradingApp(QWidget):
         self.limit_input.setValue(1000)
 
         self.strat_input = QComboBox(self)
-        self.strat_input.addItems(['DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Supertrend v2','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
+        self.strat_input.addItems(['RSI', 'DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Supertrend v2','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
 
         form_layout = QFormLayout()
         symbol_label = QtWidgets.QLabel('Symbol:')
@@ -176,6 +176,9 @@ class CryptoTradingApp(QWidget):
             self.current_strategy = self.strategy_manager.supertrend_v3
         if self.strat_input.currentText() == "DCA":
             self.current_strategy = self.strategy_manager.dca_strategy
+        elif self.strat_input.currentText() == "RSI":
+            self.current_strategy = self.strategy_manager.rsi_strategy
+            
             
             
         self.canvas.ax1.clear()
