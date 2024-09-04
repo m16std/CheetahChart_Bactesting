@@ -123,7 +123,7 @@ class StrategyManager:
         balance = [[],[]]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 1
+        position_size = 0.1
         trade_open = False 
         percent = int(len(df) / 50)
 
@@ -197,7 +197,7 @@ class StrategyManager:
         balance = [[],[]]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 1
+        position_size = 0.1
         trade_open = False 
         percent = int(len(df) / 50)
 
@@ -268,7 +268,7 @@ class StrategyManager:
         balance = [[],[]]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 1
+        position_size = 0.1
         trade_open = False 
 
         percent = int(len(df) / 50)
@@ -357,7 +357,7 @@ class StrategyManager:
         balance = [[],[]]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 1
+        position_size = 0.1
         leverage = 2
         trade_open = False 
         percent = int(len(df) / 50)
@@ -416,7 +416,7 @@ class StrategyManager:
         balance = [[], []]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 1
+        position_size = 0.1
         trade_open = False
         open_price = 0
         open_time = 0
@@ -488,7 +488,7 @@ class StrategyManager:
         balance = [[], []]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 1
+        position_size = 0.1
         trade_open = False
         open_price = 0
         open_time = 0
@@ -683,7 +683,7 @@ class StrategyManager:
         open_time = 0
         type = 1
         current_balance = 100
-        position_size = 1
+        position_size = 0.1
         leverage = 2
         trade_open = False
         balance = [[current_balance], [df.index[0]]]
@@ -791,9 +791,9 @@ class StrategyManager:
         balance = [[], []]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 0.5
+        position_size = 0.1
         shtraf = 1
-        leverage = 5
+        leverage = 2
         trade_open = False
         percent5 = int(len(df) / 50)
 
@@ -876,9 +876,9 @@ class StrategyManager:
         balance = [[], []]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 0.5
+        position_size = 0.1
         shtraf = 1
-        leverage = 5
+        leverage = 2
         trade_open = False
         percent5 = int(len(df) / 50)
 
@@ -965,7 +965,7 @@ class StrategyManager:
         open_time = 0
         type = 1
         current_balance = 100
-        position_size = 1
+        position_size = 0.1
         leverage = 2
         profit_factor = 1.4
         was_below = 0
@@ -1068,7 +1068,7 @@ class StrategyManager:
                     mid_open_price = df['close'].iloc[i]
                     for j in range (orders-1):
                         open_price.append(open_price[-1]*0.98)
-                        position_size.append(1/orders)
+                        position_size.append(1/orders/10)
                     open_time.append(df.index[i])
                     type = 1
                     tp = mid_open_price * 1.01
@@ -1080,7 +1080,7 @@ class StrategyManager:
                     mid_open_price = df['close'].iloc[i]
                     for j in range (orders):
                         open_price.append(open_price[-1]*1.01)
-                        position_size.append(1/orders)
+                        position_size.append(1/orders/10)
                     open_time.append(df.index[i]) 
                     type = -1
                     tp = mid_open_price * 0.99
@@ -1141,7 +1141,7 @@ class StrategyManager:
         balance = [[],[]]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 1
+        position_size = 0.1
         leverage = 2
         trade_open = False 
         percent = int(len(df) / 50)
@@ -1184,7 +1184,6 @@ class StrategyManager:
         balance[1].append(df.index[-1])
         return transactions, balance
     
-
     def rsi_strategy(self, df):
 
         df['rsi'] = ta.momentum.RSIIndicator(df['close'], window=14).rsi()
@@ -1204,7 +1203,7 @@ class StrategyManager:
         balance = [[],[]]
         balance[0].append(current_balance)
         balance[1].append(df.index[0])
-        position_size = 1
+        position_size = 0.1
         leverage = 2
         trade_open = False 
         percent = int(len(df) / 50)
@@ -1235,6 +1234,68 @@ class StrategyManager:
                     balance[0].append(current_balance)
                     balance[1].append(df.index[i]) 
                 if df['rsi'].iloc[i-1] > 70 and df['rsi'].iloc[i] <= 70:
+                    open_price = df['close'].iloc[i]
+                    open_time = df.index[i]
+                    type = -1
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
+                    trade_open = True
+                    balance[0].append(current_balance)
+                    balance[1].append(df.index[i])
+
+        balance[0].append(current_balance)
+        balance[1].append(df.index[-1])
+        return transactions, balance
+
+    def ma50200_cross_strategy(self, df):
+
+        df['ma50'] = (df['close'].rolling(window=50, closed='right').mean() / df['close'].rolling(window=50, closed='left').mean() - 1)  * 50
+        df['ma200'] = (df['close'].rolling(window=200, closed='right').mean() / df['close'].rolling(window=200, closed='left').mean() - 1) * 200
+
+        self.app.canvas.ax2.plot(df.index, df['ma50'], label='ma 50', color='red', alpha=0.5)
+        self.app.canvas.ax2.plot(df.index, df['ma200'], label='ma 200', color='white', alpha=0.5)
+        self.app.canvas.draw()
+        self.app.show()
+
+        transactions = []
+        profit_factor = 1.4
+        open_price = 0
+        open_time = 0
+        type = 1 # 1 - long, -1 - short
+        current_balance = 100
+        balance = [[],[]]
+        balance[0].append(current_balance)
+        balance[1].append(df.index[0])
+        position_size = 0.1
+        leverage = 2
+        trade_open = False 
+        percent = int(len(df) / 50)
+
+        for i in range(len(df)):
+            if i % percent == 0:
+                self.app.bar.setValue(int(i / len(df) * 100))
+            if trade_open:
+                if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
+                    trade_open = False
+                    
+                elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
+                    trade_open = False
+
+                else:
+                    balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type*leverage)
+                    balance[1].append(df.index[i])  
+
+            if not trade_open:
+                if df['ma50'].iloc[i-1] < df['ma200'].iloc[i-1] and df['ma50'].iloc[i] >= df['ma200'].iloc[i]:
+                    open_price = df['close'].iloc[i]
+                    open_time = df.index[i]
+                    type = 1
+                    tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
+                    trade_open = True
+                    balance[0].append(current_balance)
+                    balance[1].append(df.index[i]) 
+                if df['ma50'].iloc[i-1] > df['ma200'].iloc[i-1] and df['ma50'].iloc[i] <= df['ma200'].iloc[i]:
                     open_price = df['close'].iloc[i]
                     open_time = df.index[i]
                     type = -1

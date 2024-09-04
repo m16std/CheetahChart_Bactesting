@@ -1,6 +1,6 @@
 
 import sys
-from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QFormLayout, QProgressBar # type: ignore
+from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QFormLayout, QProgressBar # type: ignore
 from PyQt5 import QtGui, QtWidgets # type: ignore
 from PyQt5.QtGui import *  # type: ignore
 from PyQt5.QtCore import Qt # type: ignore
@@ -23,6 +23,7 @@ class MplCanvas(FigureCanvas):
 
     def __init__(self, parent=None, width=5, height=4, dpi=100):
         fig, (self.ax1, self.ax3) = plt.subplots(2, 1, figsize=(12, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, facecolor='#151924')
+
         self.ax2 = self.ax1.twinx()
         self.ax1.set_facecolor('#151924')
         self.ax3.set_facecolor('#151924')
@@ -37,6 +38,32 @@ class MplCanvas(FigureCanvas):
             tick.set_color('white')
         for tick in self.ax3.get_yticklabels():
             tick.set_color('white')
+
+        # Четкие надписи внизу графика цен
+        locator = mdates.AutoDateLocator()
+        formatter = mdates.ConciseDateFormatter(locator)
+        self.ax1.xaxis.set_major_locator(locator)
+        self.ax1.xaxis.set_major_formatter(formatter)
+
+        text = dict()
+        transform = self.ax1.transAxes
+        textprops ={'size':'10'}
+
+        text[0] = self.ax1.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[1] = self.ax1.text(0, -0.075, '0%', transform = transform, ha = 'left', color = '#089981', **textprops)
+        text[2] = self.ax1.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[3] = self.ax1.text(0.15, -0.075, '0%', transform = transform, ha = 'left', color = '#089981', **textprops)
+        text[4] = self.ax1.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[5] = self.ax1.text(0.3, -0.075, '0', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[6] = self.ax1.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[7] = self.ax1.text(0.45, -0.075, '0 days', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[8] = self.ax1.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[9] = self.ax1.text(0.6, -0.075, '0 USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
+        text[10] = self.ax1.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[11] = self.ax1.text(0.75, -0.075, '0 USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
+        text[12] = self.ax1.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[13] = self.ax1.text(0.9, -0.075, '0%', transform = transform, ha = 'left', color = '#F23645', **textprops)
+        text[14] = self.ax1.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = 'white')
 
         plt.subplots_adjust(left=0.04, bottom=0.03, right=1, top=1, hspace=0.12)
         super(MplCanvas, self).__init__(fig)
@@ -55,7 +82,7 @@ class CryptoTradingApp(QWidget):
 
         self.data_loader = None
         self.current_data = None
-        self.setGeometry(100, 100, 1600, 900)
+        self.setGeometry(100, 100, 1300, 800)
 
         layout = QVBoxLayout(self)
 
@@ -69,10 +96,15 @@ class CryptoTradingApp(QWidget):
         self.limit_input.setRange(100, 100000)
         self.limit_input.setValue(1000)
 
-        self.strat_input = QComboBox(self)
-        self.strat_input.addItems(['RSI', 'DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Supertrend v2','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
+        self.bar = QProgressBar(self) 
+        self.bar.setGeometry(200, 100, 200, 30) 
+        self.bar.setValue(0) 
+        self.bar.setAlignment(Qt.AlignCenter) 
 
-        form_layout = QFormLayout()
+        self.strat_input = QComboBox(self)
+        self.strat_input.addItems(['MA-50 cross MA-200', 'RSI', 'DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Supertrend v2','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
+
+        
         symbol_label = QtWidgets.QLabel('Symbol:')
         interval_label = QtWidgets.QLabel('Interval:')
         limit_label = QtWidgets.QLabel('Limit:')
@@ -85,18 +117,6 @@ class CryptoTradingApp(QWidget):
         strategy_label.setFont(QtGui.QFont('Trebuchet MS', 10))
         download_label.setFont(QtGui.QFont('Trebuchet MS', 10))
 
-        form_layout.addRow(symbol_label, self.symbol_input)
-        form_layout.addRow(interval_label, self.interval_input)
-        form_layout.addRow(limit_label, self.limit_input)
-        form_layout.addRow(strategy_label, self.strat_input)
-
-        self.bar = QProgressBar(self) 
-        self.bar.setGeometry(200, 100, 200, 30) 
-        self.bar.setValue(0) 
-        self.bar.setAlignment(Qt.AlignCenter) 
-        
-        form_layout.addRow(download_label, self.bar)
-        layout.addLayout(form_layout)
 
 
         button_layout = QHBoxLayout()
@@ -123,13 +143,27 @@ class CryptoTradingApp(QWidget):
 
         layout.addLayout(button_layout)
 
+
+        hbox_layout = QHBoxLayout()
+
+        hbox_layout.addWidget(self.symbol_input)
+        hbox_layout.addWidget(self.interval_input)
+        hbox_layout.addWidget(self.limit_input)
+        hbox_layout.addWidget(self.strat_input)
+        hbox_layout.addWidget(self.bar)
+
+        layout.addLayout(hbox_layout)
+
+
         # Создаем canvas и добавляем в layout
         self.canvas = MplCanvas(self, width=5, height=4, dpi=100)
         layout.addWidget(self.canvas)
 
         self.toolbar = NavigationToolbar(self.canvas, self)
-        self.toolbar.setStyleSheet("QToolButton { color: white; }")
-        layout.addWidget(self.toolbar)
+        self.toolbar.zoom()
+        self.toolbar.pan()
+        self.toolbar.setParent(None)
+        #layout.addWidget(self.toolbar)
 
         # Настраиваем политику размера для динамического изменения
         self.canvas.setSizePolicy(
@@ -174,12 +208,14 @@ class CryptoTradingApp(QWidget):
             self.current_strategy = self.strategy_manager.hawkes_process_strategy
         elif self.strat_input.currentText() == "Supertrend v3 SOLANA 1H SETUP":
             self.current_strategy = self.strategy_manager.supertrend_v3
-        if self.strat_input.currentText() == "DCA":
+        elif self.strat_input.currentText() == "DCA":
             self.current_strategy = self.strategy_manager.dca_strategy
         elif self.strat_input.currentText() == "RSI":
             self.current_strategy = self.strategy_manager.rsi_strategy
-            
-            
+        elif self.strat_input.currentText() == "MA-50 cross MA-200":
+            self.current_strategy = self.strategy_manager.ma50200_cross_strategy
+
+               
             
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
@@ -228,7 +264,7 @@ class CryptoTradingApp(QWidget):
         return data
 
     def plot_candlestick(self, df, transactions, balance):
-
+        
         # Рисуем линии на фоне
         self.canvas.ax1.grid(True, axis='both', linewidth=0.3, color='gray')
         self.canvas.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
@@ -360,11 +396,6 @@ class CryptoTradingApp(QWidget):
             for label in self.canvas.ax3.get_yticklabels(which='both'):
                 label.set_color("white")
 
-            # Четкие надписи внизу графика цен
-            locator = mdates.AutoDateLocator()
-            formatter = mdates.ConciseDateFormatter(locator)
-            self.canvas.ax1.xaxis.set_major_locator(locator)
-            self.canvas.ax1.xaxis.set_major_formatter(formatter)
 
             # Побочная инфа
             text = dict()

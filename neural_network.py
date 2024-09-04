@@ -8,13 +8,13 @@ import tensorflow as tf  # type: ignore
 from tensorflow.keras.models import Sequential  # type: ignore
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input # type: ignore
 import matplotlib.dates as mdates # type: ignore
+import matplotlib.pyplot as plt
 from tensorflow.keras.losses import MeanSquaredError # type: ignore
 from sklearn.model_selection import train_test_split # type: ignore
 from tensorflow.keras.callbacks import EarlyStopping # type: ignore
 from sklearn.preprocessing import MinMaxScaler  # type: ignore
 from tensorflow.keras.models import Sequential  # type: ignore
 from tensorflow.keras.layers import Dense, LSTM  # type: ignore
-
 
 class AIManager:
     def __init__(self, app):
@@ -97,7 +97,7 @@ class AIManager:
 
         print('Обучение нейронки')
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
-        history = self.app.model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(x_test,y_test), verbose=1)
+        history = self.app.model.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(x_test,y_test), verbose=1, callbacks=[WeightsVisualizer(self)])
 
         self.app.file_handler.save_model_dialog()
 
@@ -204,3 +204,20 @@ class AIManager:
         if self.app.file_handler.load_model_dialog():
             if self.app.file_handler.load_candlesticks():
                 self.strategy_with_lstm()
+
+class WeightsVisualizer(tf.keras.callbacks.Callback):
+    def __init__(self, app):
+        self.app = app
+
+    def on_epoch_end(self, epoch, logs=None):
+        # Получаем веса из первого слоя модели
+        weights = self.model.layers[0].get_weights()[0]
+        
+        # Визуализируем веса
+        self.app.app.canvas.ax2.imshow(weights, cmap='viridis', aspect='auto')
+        self.app.app.canvas.ax2.colorbar()
+        self.app.app.canvas.ax2.title(f'Weights after epoch {epoch + 1}')
+        self.app.app.canvas.ax2.xlabel('Neurons')
+        self.app.app.canvas.ax2.ylabel('Features')
+        self.app.app.canvas.draw()
+        self.app.app.show()
