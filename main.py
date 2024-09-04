@@ -1,6 +1,6 @@
 
 import sys
-from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QFormLayout, QProgressBar # type: ignore
+from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame
 from PyQt5 import QtGui, QtWidgets # type: ignore
 from PyQt5.QtGui import *  # type: ignore
 from PyQt5.QtCore import Qt # type: ignore
@@ -12,7 +12,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar # type: ignore
 import qdarktheme # type: ignore
 import numpy as np # type: ignore
-
+import pickle
 from data_loader import FileManager 
 from neural_network import AIManager
 from strategies import StrategyManager
@@ -74,7 +74,11 @@ class CryptoTradingApp(QWidget):
         self.file_handler = FileManager(self)
         self.strategy_manager = StrategyManager(self)
         self.ai_manager = AIManager(self)
-        self.initUI()        
+        self.initUI()       
+
+    def export_strategy(self, strategy_function, filename):
+        with open(filename, 'wb') as file:
+            pickle.dump(strategy_function, file) 
         
     def initUI(self):
         self.setWindowTitle('Cheetos Trading')
@@ -86,15 +90,29 @@ class CryptoTradingApp(QWidget):
 
         layout = QVBoxLayout(self)
 
+        font_size = 10
+
         self.symbol_input = QComboBox(self)
         self.symbol_input.addItems(['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'PEPE-USDT', 'TON-USDT', 'BNB-USDT'])
+
+        font = self.symbol_input.font()
+        font.setPointSize(font_size)
+        self.symbol_input.setFont(font)
 
         self.interval_input = QComboBox(self)
         self.interval_input.addItems(['1m', '5m', '15m', '1H', '4H', '1D'])
 
+        font = self.interval_input.font()
+        font.setPointSize(font_size)
+        self.interval_input.setFont(font)
+
         self.limit_input = QSpinBox(self)
         self.limit_input.setRange(100, 100000)
         self.limit_input.setValue(1000)
+
+        font = self.limit_input.font()
+        font.setPointSize(font_size)
+        self.limit_input.setFont(font)
 
         self.bar = QProgressBar(self) 
         self.bar.setGeometry(200, 100, 200, 30) 
@@ -104,7 +122,11 @@ class CryptoTradingApp(QWidget):
         self.strat_input = QComboBox(self)
         self.strat_input.addItems(['MA-50 cross MA-200', 'RSI', 'DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Supertrend v2','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
 
-        
+        font = self.strat_input.font()
+        font.setPointSize(font_size)
+        self.strat_input.setFont(font)
+
+
         symbol_label = QtWidgets.QLabel('Symbol:')
         interval_label = QtWidgets.QLabel('Interval:')
         limit_label = QtWidgets.QLabel('Limit:')
@@ -118,28 +140,48 @@ class CryptoTradingApp(QWidget):
         download_label.setFont(QtGui.QFont('Trebuchet MS', 10))
 
 
+        self.symbol_input.setStyleSheet("border: none;")
+        self.interval_input.setStyleSheet("border: none;")
+        self.limit_input.setStyleSheet("border: none;")
+        self.strat_input.setStyleSheet("border: none;")
 
         button_layout = QHBoxLayout()
 
-        self.run_button = QPushButton('Run Strategy', self)
-        self.run_button.clicked.connect(self.download_and_run)
-        button_layout.addWidget(self.run_button)
+        self.lr_button = QPushButton('Download and run', self)
+        self.lr_button.clicked.connect(self.download_and_run)
+        self.lr_button.setStyleSheet("border: none; font-size: 12px; color: white")
+        button_layout.addWidget(self.lr_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
         
-        self.save_button = QPushButton('Save Candlesticks', self)
-        self.save_button.clicked.connect(self.file_handler.save_candlesticks)
-        button_layout.addWidget(self.save_button)
-        
-        self.load_button = QPushButton('Open Candlesticks', self)
-        self.load_button.clicked.connect(self.open_and_run)
+        self.load_button = QPushButton('Load candlesticks', self)
+        self.load_button.clicked.connect(self.file_handler.save_candlesticks)
+        self.load_button.setStyleSheet("border: none; font-size: 12px; color: white")
         button_layout.addWidget(self.load_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
+        
+        self.run_button = QPushButton('Run strategy', self)
+        self.run_button.clicked.connect(self.open_and_run)
+        self.run_button.setStyleSheet("border: none; font-size: 12px; color: white")
+        button_layout.addWidget(self.run_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
 
         self.tai_button = QPushButton('Train AI', self)
         self.tai_button.clicked.connect(self.ai_manager.train_model)
+        self.tai_button.setStyleSheet("border: none; font-size: 12px; color: white")
         button_layout.addWidget(self.tai_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
 
         self.rai_button = QPushButton('Run AI', self)
         self.rai_button.clicked.connect(self.ai_manager.run_ai)
+        self.rai_button.setStyleSheet("border: none; font-size: 12px; color: white")
         button_layout.addWidget(self.rai_button)
+
+        spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        button_layout.addItem(spacer)
 
         layout.addLayout(button_layout)
 
@@ -174,6 +216,25 @@ class CryptoTradingApp(QWidget):
         self.canvas.updateGeometry()
         self.show()
 
+    def create_vertical_separator(self):
+        # Создаем QFrame для вертикального разделителя
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("color: gray; background-color: gray;")
+        separator.setFixedWidth(2)
+
+        # Создаем виджет-контейнер для разделителя
+        container = QWidget()
+        vbox = QVBoxLayout()
+        vbox.addStretch(1)  # Добавляем отступ сверху
+        vbox.addWidget(separator)
+        vbox.addStretch(1)  # Добавляем отступ снизу
+        vbox.setContentsMargins(0, 0, 0, 0)  # Убираем отступы по краям
+        container.setLayout(vbox)
+
+        return container
+
     def open_and_run(self):
         if self.file_handler.load_candlesticks():
             self.run_strategy()
@@ -187,35 +248,40 @@ class CryptoTradingApp(QWidget):
         
         self.run_strategy()
 
-    def run_strategy(self):
-        if self.strat_input.currentText() == "MACD":
-            self.current_strategy = self.strategy_manager.macd_strategy
-        elif self.strat_input.currentText() == "MACD v2":
-            self.current_strategy = self.strategy_manager.macd_v2_strategy
-        elif self.strat_input.currentText() == "Bollinger + VWAP":
-            self.current_strategy = self.strategy_manager.bollinger_vwap_strategy
-        elif self.strat_input.currentText() == "Bollinger v2":
-            self.current_strategy = self.strategy_manager.bollinger_v2
-        elif self.strat_input.currentText() == "Supertrend":
-            self.current_strategy = self.strategy_manager.supertrend_strategy
-        elif self.strat_input.currentText() == "Supertrend v2":
-            self.current_strategy = self.strategy_manager.supertrend_v2
-        elif self.strat_input.currentText() == "MACD v3":
-            self.current_strategy = self.strategy_manager.macd_v3_strategy
-        elif self.strat_input.currentText() == "MACD VWAP":
-            self.current_strategy = self.strategy_manager.macd_vwap_strategy
-        elif self.strat_input.currentText() == "Hawkes Process":
-            self.current_strategy = self.strategy_manager.hawkes_process_strategy
-        elif self.strat_input.currentText() == "Supertrend v3 SOLANA 1H SETUP":
-            self.current_strategy = self.strategy_manager.supertrend_v3
-        elif self.strat_input.currentText() == "DCA":
-            self.current_strategy = self.strategy_manager.dca_strategy
-        elif self.strat_input.currentText() == "RSI":
-            self.current_strategy = self.strategy_manager.rsi_strategy
-        elif self.strat_input.currentText() == "MA-50 cross MA-200":
-            self.current_strategy = self.strategy_manager.ma50200_cross_strategy
+    def get_strategy_from_name(self, name):
+        current_strategy = self.strategy_manager.macd_strategy
+        if name == "MACD":
+            current_strategy = self.strategy_manager.macd_strategy
+        elif name == "MACD v2":
+            current_strategy = self.strategy_manager.macd_v2_strategy
+        elif name == "Bollinger + VWAP":
+            current_strategy = self.strategy_manager.bollinger_vwap_strategy
+        elif name == "Bollinger v2":
+            current_strategy = self.strategy_manager.bollinger_v2
+        elif name == "Supertrend":
+            current_strategy = self.strategy_manager.supertrend_strategy
+        elif name == "Supertrend v2":
+            current_strategy = self.strategy_manager.supertrend_v2
+        elif name == "MACD v3":
+            current_strategy = self.strategy_manager.macd_v3_strategy
+        elif name == "MACD VWAP":
+            current_strategy = self.strategy_manager.macd_vwap_strategy
+        elif name == "Hawkes Process":
+            current_strategy = self.strategy_manager.hawkes_process_strategy
+        elif name == "Supertrend v3 SOLANA 1H SETUP":
+            current_strategy = self.strategy_manager.supertrend_v3
+        elif name == "DCA":
+            current_strategy = self.strategy_manager.dca_strategy
+        elif name == "RSI":
+            current_strategy = self.strategy_manager.rsi_strategy
+        elif name == "MA-50 cross MA-200":
+            current_strategy = self.strategy_manager.ma50200_cross_strategy
 
-               
+        return current_strategy
+
+    def run_strategy(self):
+        
+        self.current_strategy = self.get_strategy_from_name(self.strat_input.currentText())
             
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
