@@ -21,8 +21,8 @@ pd.options.mode.chained_assignment = None
 
 class MplCanvas(FigureCanvas):
 
-    def __init__(self, parent=None, width=5, height=4, dpi=100):
-        fig, (self.ax1, self.ax3) = plt.subplots(2, 1, figsize=(12, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, facecolor='#151924')
+    def __init__(self):
+        fig, (self.ax1, self.ax3) = plt.subplots(2, 1, figsize=(12, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, facecolor='#151924')
 
         self.ax2 = self.ax1.twinx()
         self.ax1.set_facecolor('#151924')
@@ -198,7 +198,7 @@ class CryptoTradingApp(QWidget):
 
 
         # Создаем canvas и добавляем в layout
-        self.canvas = MplCanvas(self, width=5, height=4, dpi=100)
+        self.canvas = MplCanvas()
         layout.addWidget(self.canvas)
 
         self.toolbar = NavigationToolbar(self.canvas, self)
