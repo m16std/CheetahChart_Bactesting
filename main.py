@@ -3,7 +3,7 @@ import sys
 from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame
 from PyQt5 import QtGui, QtWidgets # type: ignore
 from PyQt5.QtGui import *  # type: ignore
-from PyQt5.QtCore import Qt # type: ignore
+from PyQt5.QtCore import Qt, QSettings # type: ignore
 import requests # type: ignore
 import pandas as pd # type: ignore
 import matplotlib.pyplot as plt # type: ignore
@@ -21,52 +21,61 @@ pd.options.mode.chained_assignment = None
 
 class MplCanvas(FigureCanvas):
 
-    def __init__(self):
-        fig, (self.ax1, self.ax3) = plt.subplots(2, 1, figsize=(12, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, facecolor='#151924')
+    def __init__(self, facecolor, textcolor):
+        self.fig, (self.ax1, self.ax3) = plt.subplots(2, 1, figsize=(12, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, facecolor=facecolor)
+
+        # Вызов конструктора базового класса FigureCanvas
+        super(MplCanvas, self).__init__(self.fig)
 
         self.ax2 = self.ax1.twinx()
-        self.ax1.set_facecolor('#151924')
-        self.ax3.set_facecolor('#151924')
-        # Меняем цвет надписей
-        self.ax1.tick_params(colors='white', direction='out')
-        for tick in self.ax1.get_xticklabels():
-            tick.set_color('white')
-        for tick in self.ax1.get_yticklabels():
-            tick.set_color('white')
-        self.ax3.tick_params(colors='white', direction='out')
-        for tick in self.ax3.get_xticklabels():
-            tick.set_color('white')
-        for tick in self.ax3.get_yticklabels():
-            tick.set_color('white')
+        self.init_canvas(facecolor, textcolor)  # Инициализация настроек canvas
 
-        # Четкие надписи внизу графика цен
-        locator = mdates.AutoDateLocator()
-        formatter = mdates.ConciseDateFormatter(locator)
-        self.ax1.xaxis.set_major_locator(locator)
-        self.ax1.xaxis.set_major_formatter(formatter)
+    def init_canvas(self, facecolor, textcolor):
+        """Метод для инициализации или обновления цветов"""
+        self.fig.patch.set_facecolor(facecolor)
+        self.ax1.set_facecolor(facecolor)
+        self.ax3.set_facecolor(facecolor)
+
+        # Обновляем цвета для осей и текста
+        self.ax1.tick_params(colors=textcolor, direction='out')
+        for tick in self.ax1.get_xticklabels():
+            tick.set_color(textcolor)
+        for tick in self.ax1.get_yticklabels():
+            tick.set_color(textcolor)
+
+        self.ax3.tick_params(colors=textcolor, direction='out')
+        for tick in self.ax3.get_xticklabels():
+            tick.set_color(textcolor)
+        for tick in self.ax3.get_yticklabels():
+            tick.set_color(textcolor)
 
         text = dict()
         transform = self.ax1.transAxes
-        textprops ={'size':'10'}
-
-        text[0] = self.ax1.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = 'white', **textprops)
+        textprops = {'size': '10'}
+        text[0] = self.ax1.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = textcolor, **textprops)
         text[1] = self.ax1.text(0, -0.075, '0%', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[2] = self.ax1.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[2] = self.ax1.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = textcolor, **textprops)
         text[3] = self.ax1.text(0.15, -0.075, '0%', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[4] = self.ax1.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[5] = self.ax1.text(0.3, -0.075, '0', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[6] = self.ax1.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[7] = self.ax1.text(0.45, -0.075, '0 days', transform = transform, ha = 'left', color = 'white', **textprops)
-        text[8] = self.ax1.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[4] = self.ax1.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = textcolor, **textprops)
+        text[5] = self.ax1.text(0.3, -0.075, '0', transform = transform, ha = 'left', color = textcolor, **textprops)
+        text[6] = self.ax1.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = textcolor, **textprops)
+        text[7] = self.ax1.text(0.45, -0.075, '0 days', transform = transform, ha = 'left', color = textcolor, **textprops)
+        text[8] = self.ax1.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = textcolor, **textprops)
         text[9] = self.ax1.text(0.6, -0.075, '0 USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[10] = self.ax1.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[10] = self.ax1.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = textcolor, **textprops)
         text[11] = self.ax1.text(0.75, -0.075, '0 USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[12] = self.ax1.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = 'white', **textprops)
+        text[12] = self.ax1.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = textcolor, **textprops)
         text[13] = self.ax1.text(0.9, -0.075, '0%', transform = transform, ha = 'left', color = '#F23645', **textprops)
-        text[14] = self.ax1.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = 'white')
+        text[14] = self.ax1.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = textcolor)
 
         plt.subplots_adjust(left=0.04, bottom=0.03, right=1, top=1, hspace=0.12)
-        super(MplCanvas, self).__init__(fig)
+
+        # Перерисовываем график
+        self.draw()
+
+    def update_colors(self, facecolor, textcolor):
+        """Метод для обновления цветов и перерисовки"""
+        self.init_canvas(facecolor, textcolor)
 
 class CryptoTradingApp(QWidget):
     def __init__(self):
@@ -82,7 +91,7 @@ class CryptoTradingApp(QWidget):
         
     def initUI(self):
         self.setWindowTitle('Cheetos Trading')
-        self.setStyleSheet("background-color: #151924;")
+        #self.setStyleSheet("background-color: #151924;")
 
         self.data_loader = None
         self.current_data = None
@@ -126,20 +135,6 @@ class CryptoTradingApp(QWidget):
         font.setPointSize(font_size)
         self.strat_input.setFont(font)
 
-
-        symbol_label = QtWidgets.QLabel('Symbol:')
-        interval_label = QtWidgets.QLabel('Interval:')
-        limit_label = QtWidgets.QLabel('Limit:')
-        strategy_label = QtWidgets.QLabel('Strategy:')
-        download_label = QtWidgets.QLabel('Donwload:')
-
-        symbol_label.setFont(QtGui.QFont('Trebuchet MS', 10))
-        interval_label.setFont(QtGui.QFont('Trebuchet MS', 10))
-        limit_label.setFont(QtGui.QFont('Trebuchet MS', 10))
-        strategy_label.setFont(QtGui.QFont('Trebuchet MS', 10))
-        download_label.setFont(QtGui.QFont('Trebuchet MS', 10))
-
-
         self.symbol_input.setStyleSheet("border: none;")
         self.interval_input.setStyleSheet("border: none;")
         self.limit_input.setStyleSheet("border: none;")
@@ -149,42 +144,48 @@ class CryptoTradingApp(QWidget):
 
         self.lr_button = QPushButton('Download and run', self)
         self.lr_button.clicked.connect(self.download_and_run)
-        self.lr_button.setStyleSheet("border: none; font-size: 12px; color: white")
+        self.lr_button.setStyleSheet("border: none; font-size: 12px; ")
         button_layout.addWidget(self.lr_button)
 
         button_layout.addWidget(self.create_vertical_separator())
         
         self.load_button = QPushButton('Load candlesticks', self)
         self.load_button.clicked.connect(self.file_handler.save_candlesticks)
-        self.load_button.setStyleSheet("border: none; font-size: 12px; color: white")
+        self.load_button.setStyleSheet("border: none; font-size: 12px; ")
         button_layout.addWidget(self.load_button)
 
         button_layout.addWidget(self.create_vertical_separator())
         
         self.run_button = QPushButton('Run strategy', self)
         self.run_button.clicked.connect(self.open_and_run)
-        self.run_button.setStyleSheet("border: none; font-size: 12px; color: white")
+        self.run_button.setStyleSheet("border: none; font-size: 12px;")
         button_layout.addWidget(self.run_button)
 
         button_layout.addWidget(self.create_vertical_separator())
 
         self.tai_button = QPushButton('Train AI', self)
         self.tai_button.clicked.connect(self.ai_manager.train_model)
-        self.tai_button.setStyleSheet("border: none; font-size: 12px; color: white")
+        self.tai_button.setStyleSheet("border: none; font-size: 12px; ")
         button_layout.addWidget(self.tai_button)
 
         button_layout.addWidget(self.create_vertical_separator())
 
         self.rai_button = QPushButton('Run AI', self)
         self.rai_button.clicked.connect(self.ai_manager.run_ai)
-        self.rai_button.setStyleSheet("border: none; font-size: 12px; color: white")
+        self.rai_button.setStyleSheet("border: none; font-size: 12px; ")
         button_layout.addWidget(self.rai_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
+
+        self.toggle_theme_button = QPushButton("Switch Theme")
+        self.toggle_theme_button.clicked.connect(self.toggle_theme)
+        self.toggle_theme_button.setStyleSheet("border: none; font-size: 12px; ")
+        button_layout.addWidget(self.toggle_theme_button)
 
         spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addItem(spacer)
 
         layout.addLayout(button_layout)
-
 
         hbox_layout = QHBoxLayout()
 
@@ -196,9 +197,8 @@ class CryptoTradingApp(QWidget):
 
         layout.addLayout(hbox_layout)
 
-
         # Создаем canvas и добавляем в layout
-        self.canvas = MplCanvas()
+        self.canvas = MplCanvas(facecolor='#151924', textcolor = 'white')
         layout.addWidget(self.canvas)
 
         self.toolbar = NavigationToolbar(self.canvas, self)
@@ -212,7 +212,11 @@ class CryptoTradingApp(QWidget):
             self.sizePolicy().Expanding,
             self.sizePolicy().Expanding
         )
-        
+
+        self.settings = QSettings("MyApp", "MyCompany")
+        self.current_theme = self.load_theme()  # Загружаем тему
+        self.apply_theme()
+
         self.canvas.updateGeometry()
         self.show()
 
@@ -235,6 +239,36 @@ class CryptoTradingApp(QWidget):
 
         return container
 
+    def apply_theme(self):
+        if self.current_theme == "dark":
+            qdarktheme.setup_theme(
+                custom_colors={
+                    "[dark]": {
+                        "background": "#151924",
+                        "primary": "#ffffff",
+                        "primary>button.hoverBackground": "#669ff55c",
+                        "primary>progressBar.background": "#669ff5",
+                    }
+                }
+            )
+            self.canvas.update_colors(facecolor='#151924', textcolor = 'white')
+        else:
+
+            qdarktheme.setup_theme(self.current_theme)
+            self.canvas.update_colors(facecolor='#ffffff', textcolor = 'black')
+
+    def toggle_theme(self):
+        # Переключаем между темной и светлой темой
+        new_theme = "dark" if self.current_theme == "light" else "light"
+        self.current_theme = new_theme  # Обновляем текущую тему
+        self.apply_theme()
+
+        # Сохраняем состояние темы
+        self.settings.setValue("theme", self.current_theme)
+
+    def load_theme(self):
+        return self.settings.value("theme", "light")
+    
     def open_and_run(self):
         if self.file_handler.load_candlesticks():
             self.run_strategy()
@@ -280,9 +314,7 @@ class CryptoTradingApp(QWidget):
         return current_strategy
 
     def run_strategy(self):
-        
         self.current_strategy = self.get_strategy_from_name(self.strat_input.currentText())
-            
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
         self.canvas.ax3.clear()
@@ -330,7 +362,11 @@ class CryptoTradingApp(QWidget):
         return data
 
     def plot_candlestick(self, df, transactions, balance):
-        
+        if self.current_theme == "dark":
+            textcolor = 'white'
+        else:
+            textcolor = 'black'
+
         # Рисуем линии на фоне
         self.canvas.ax1.grid(True, axis='both', linewidth=0.3, color='gray')
         self.canvas.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
@@ -460,7 +496,7 @@ class CryptoTradingApp(QWidget):
 
 
             for label in self.canvas.ax3.get_yticklabels(which='both'):
-                label.set_color("white")
+                label.set_color(textcolor)
 
 
             # Побочная инфа
@@ -469,21 +505,22 @@ class CryptoTradingApp(QWidget):
             textprops ={'size':'10'}
             period = balance[1][-1] - balance[1][0]
             period_days = f"{period.days} days"
-            text[0] = self.canvas.ax1.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = 'white', **textprops)
+
+            text[0] = self.canvas.ax1.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = textcolor, **textprops)
             text[1] = self.canvas.ax1.text(0, -0.075, str(winrate)+'%', transform = transform, ha = 'left', color = '#089981', **textprops)
-            text[2] = self.canvas.ax1.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[2] = self.canvas.ax1.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = textcolor, **textprops)
             text[3] = self.canvas.ax1.text(0.15, -0.075, str(profit)+'%', transform = transform, ha = 'left', color = '#089981', **textprops)
-            text[4] = self.canvas.ax1.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = 'white', **textprops)
-            text[5] = self.canvas.ax1.text(0.3, -0.075, str(wins+losses), transform = transform, ha = 'left', color = 'white', **textprops)
-            text[6] = self.canvas.ax1.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = 'white', **textprops)
-            text[7] = self.canvas.ax1.text(0.45, -0.075, period_days, transform = transform, ha = 'left', color = 'white', **textprops)
-            text[8] = self.canvas.ax1.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[4] = self.canvas.ax1.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = textcolor, **textprops)
+            text[5] = self.canvas.ax1.text(0.3, -0.075, str(wins+losses), transform = transform, ha = 'left', color = textcolor, **textprops)
+            text[6] = self.canvas.ax1.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = textcolor, **textprops)
+            text[7] = self.canvas.ax1.text(0.45, -0.075, period_days, transform = transform, ha = 'left', color = textcolor, **textprops)
+            text[8] = self.canvas.ax1.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = textcolor, **textprops)
             text[9] = self.canvas.ax1.text(0.6, -0.075, str(balance[0][0])+' USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-            text[10] = self.canvas.ax1.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[10] = self.canvas.ax1.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = textcolor, **textprops)
             text[11] = self.canvas.ax1.text(0.75, -0.075, str(round(balance[0][-1], ndigits=1))+' USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-            text[12] = self.canvas.ax1.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = 'white', **textprops)
+            text[12] = self.canvas.ax1.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = textcolor, **textprops)
             text[13] = self.canvas.ax1.text(0.9, -0.075, str(round(max_drawdown, ndigits=1))+'%', transform = transform, ha = 'left', color = '#F23645', **textprops)
-            text[14] = self.canvas.ax1.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = 'white')
+            text[14] = self.canvas.ax1.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = textcolor)
         
         # Легенды
         self.canvas.ax1.legend(loc='upper left', edgecolor='white') 
@@ -494,9 +531,11 @@ class CryptoTradingApp(QWidget):
         self.canvas.draw()
         self.show()
 
+
+
 def main():
     app = QApplication(sys.argv)
-    qdarktheme.setup_theme()
+    qdarktheme.setup_theme("dark")  # Начальная тема
     ex = CryptoTradingApp()
     ex.show()
     sys.exit(app.exec_())
