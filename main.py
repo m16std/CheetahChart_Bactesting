@@ -1,7 +1,6 @@
 
 import sys
-from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame
-from PyQt5 import QtGui, QtWidgets # type: ignore
+from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog
 from PyQt5.QtGui import *  # type: ignore
 from PyQt5.QtCore import Qt, QSettings # type: ignore
 import requests # type: ignore
@@ -16,6 +15,7 @@ import pickle
 from data_loader import FileManager 
 from neural_network import AIManager
 from strategies import StrategyManager
+from settings_window import SettingsDialog
 
 pd.options.mode.chained_assignment = None
 
@@ -109,7 +109,7 @@ class CryptoTradingApp(QWidget):
         self.symbol_input.setFont(font)
 
         self.interval_input = QComboBox(self)
-        self.interval_input.addItems(['1m', '5m', '15m', '1H', '4H', '1D'])
+        self.interval_input.addItems(['1m', '5m', '15m','30m', '1H', '4H', '12H','1D'])
 
         font = self.interval_input.font()
         font.setPointSize(font_size)
@@ -182,6 +182,12 @@ class CryptoTradingApp(QWidget):
         self.toggle_theme_button.setStyleSheet("border: none; font-size: 12px; ")
         button_layout.addWidget(self.toggle_theme_button)
 
+        self.settings_button = QPushButton("Settings")
+        self.settings_button.clicked.connect(self.open_settings_dialog)
+        self.settings_button.setStyleSheet("border: none; font-size: 12px; ")
+        button_layout.addWidget(self.settings_button)
+
+
         spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addItem(spacer)
 
@@ -219,6 +225,19 @@ class CryptoTradingApp(QWidget):
 
         self.canvas.updateGeometry()
         self.show()
+
+    def open_settings_dialog(self):
+        dialog = SettingsDialog(self.settings, self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.load_settings()
+
+    def load_settings(self):
+        # Здесь можно применять настройки в логике программы
+        commission = self.settings.value("commission", "0.1")
+        initial_balance = self.settings.value("initial_balance", "1000")
+        leverage = self.settings.value("leverage", "1")
+        print(f"Загружены настройки: Комиссия: {commission}, Начальный баланс: {initial_balance}, Плечо: {leverage}")
+
 
     def create_vertical_separator(self):
         # Создаем QFrame для вертикального разделителя
