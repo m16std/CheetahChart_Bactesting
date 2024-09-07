@@ -19,8 +19,9 @@ class StrategyManager:
     def set_bar_value(self, percent):
         self.app.bar.setValue(percent)
 
-    def close(self, balance, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, close_time, type, tp, sl, commission):
-        
+    def close(self, balance, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, close_time, type, tp, sl):
+        commission = self.app.commission
+
         if (close_price > open_price and type == 1) or (close_price < open_price and type == -1):
             result = 1
         else:
@@ -126,28 +127,23 @@ class StrategyManager:
         # Рисуем индикаторы
         self.plot_macd(df)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        profit_factor = 1.5
-        open_price = 0
-        open_time = 0
-        type = 1 # 1 - long, -1 - short
-        current_balance = 100
-        balance = [[],[]]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
+        balance = [[current_balance], [df.index[0]]]
         position_size = 1
-        leverage = 1
-        trade_open = False 
-        percent = int(len(df) / 50)
+        percent = int(len(df) / 100)
+        trade_open = False
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl)
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl)
                 else:
                     balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type)
                     balance[1].append(df.index[i])  
@@ -181,31 +177,25 @@ class StrategyManager:
         df['macd_signal'] = macd.macd_signal()
 
         # Рисуем индикаторы
-        self.app.canvas.ax2.plot(df.index, df['macd'], label='MACD', color='yellow', linestyle='--', alpha = 0.5)
-        self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='MACD Signal', color='orange', alpha = 0.5)
+        self.plot_macd(df)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        profit_factor = 1.5
-        leverage = 1
-        open_price = 0
-        open_time = 0
-        type = 1 # 1 - long, -1 - short
-        current_balance = 100
-        balance = [[],[]]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
+        balance = [[current_balance], [df.index[0]]]
         position_size = 1
-        trade_open = False 
-        percent = int(len(df) / 50)
+        percent = int(len(df) / 100)
+        trade_open = False
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl)
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl)
                 else:
                     balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type)
                     balance[1].append(df.index[i])  
@@ -238,31 +228,25 @@ class StrategyManager:
         df['macd'] = macd.macd()
         df['macd_signal'] = macd.macd_signal()
 
-        self.app.canvas.ax2.plot(df.index, df['macd'], label='MACD', color='yellow', linestyle='--', alpha = 0.5)
-        self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='MACD Signal', color='orange', alpha = 0.5)
+        # Рисуем индикаторы
+        self.plot_macd(df)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        open_price = 0
-        open_time = 0
-        type = 1 # 1 - long, -1 - short
-        current_balance = 100
-        balance = [[],[]]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
+        balance = [[current_balance], [df.index[0]]]
         position_size = 1
-        leverage = 1
-        trade_open = False 
-
-        percent = int(len(df) / 50)
+        percent = int(len(df) / 100)
+        trade_open = False
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if df['macd'].iloc[i-1] > df['macd'].iloc[i-2] and df['macd'].iloc[i] < df['macd'].iloc[i-1] and type == 1:
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, 0, 0, 0.0008)        
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, df['close'].iloc[i], df.index[i], type, 0, 0)        
                 elif df['macd'].iloc[i-1] < df['macd'].iloc[i-2] and df['macd'].iloc[i] > df['macd'].iloc[i-1] and type == -1:
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, 0, 0, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, df['close'].iloc[i], df.index[i], type, 0, 0)
                 else:
                     balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type)
                     balance[1].append(df.index[i])  
@@ -300,29 +284,24 @@ class StrategyManager:
         self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='MACD Signal', color='orange', alpha = 0.5)
         self.app.canvas.ax1.plot(df.index, df['vwap'], label='VWAP', color='white', linestyle='--', alpha = 0.5)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        profit_factor = 1.5
-        open_price = 0
-        open_time = 0
-        type = 1 # 1 - long, -1 - short
-        current_balance = 100
-        balance = [[],[]]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
+        balance = [[current_balance], [df.index[0]]]
         position_size = 1
-        leverage = 1
-        trade_open = False 
-        percent = int(len(df) / 50)
+        percent = int(len(df) / 100)
+        trade_open = False
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl)
                     trade_open = False
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl)
                     trade_open = False
                 else:
                     balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type*leverage)
@@ -363,32 +342,26 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['bollinger_low'], label='BB Low', color='green', alpha = 0.5)
         self.app.canvas.ax1.plot(df.index, df['vwap'], label='VWAP', color='orange', linestyle='--', alpha = 0.5)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        current_balance = 100
-        balance = [[], []]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
+        balance = [[current_balance], [df.index[0]]]
         position_size = 1
+        percent = int(len(df) / 100)
         trade_open = False
-        open_price = 0
-        open_time = 0
-        leverage = 1
-        sl = 0
-        type = 0  # 1 - long, -1 - short
-        percent = int(len(df) / 50)
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if df['high'].iloc[i] >= df['bollinger_high'].iloc[i] and type == 1:
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, df['bollinger_high'].iloc[i], df.index[i], type, df['bollinger_high'].iloc[i], sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, df['bollinger_high'].iloc[i], df.index[i], type, df['bollinger_high'].iloc[i], sl)
                     trade_open = False
                 elif df['low'].iloc[i] <= df['bollinger_low'].iloc[i] and type == -1:
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, df['bollinger_low'].iloc[i], df.index[i], type, df['bollinger_low'].iloc[i], sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, df['bollinger_low'].iloc[i], df.index[i], type, df['bollinger_low'].iloc[i], sl)
                     trade_open = False
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, open_price, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, open_price, sl)
                     trade_open = False
                 else:
                     balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type*leverage)
@@ -434,31 +407,24 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['bollinger_high'], label='BB High', color='red', alpha = 0.5)
         self.app.canvas.ax1.plot(df.index, df['bollinger_low'], label='BB Low', color='green', alpha = 0.5)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        current_balance = 100
-        balance = [[], []]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
-        position_size = 0.5
+        balance = [[current_balance], [df.index[0]]]
+        position_size = 1
+        percent = int(len(df) / 100)
         trade_open = False
-        open_price = 0
-        open_time = 0
-        profit_factor = 1.5
-        leverage = 2
-        tp = 0
-        sl = 0
-        type = 0  # 1 - long, -1 - short
-        percent = int(len(df) / 50)
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl)
                     trade_open = False
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl)
                     trade_open = False
                 else:
                     balance[0].append(current_balance+current_balance*position_size*((df['open'].iloc[i]+df['close'].iloc[i])/2/open_price-1)*type*leverage)
@@ -484,8 +450,7 @@ class StrategyManager:
 
         balance[0].append(current_balance)
         balance[1].append(df.index[-1])
-        return transactions, balance
-    
+        return transactions, balance  
     
     def supertrend_strategy(self, df):
         period = 10
@@ -508,23 +473,20 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['Final Lowerband'], label='Final Lowerband', color='green', linestyle='--', alpha=0.5)
         self.app.canvas.ax1.plot(df.index, df['Final Upperband'], label='Final Upperband', color='red', linestyle='--', alpha=0.5)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        open_price = 0
-        open_time = 0
-        type = 1
-        current_balance = 100
-        position_size = 0.5
-        leverage = 2
-        trade_open = False
         balance = [[current_balance], [df.index[0]]]
-        percent = int(len(df) / 50)
+        position_size = 1
+        percent = int(len(df) / 100)
+        trade_open = False
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if df['Supertrend'].iloc[i-1] != df['Supertrend'].iloc[i]:
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, df['close'].iloc[i], df.index[i], type, 0, 0, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, df['close'].iloc[i], df.index[i], type, 0, 0)
                     trade_open = False
                 else:
                     balance[0].append(current_balance + current_balance * position_size * ((df['open'].iloc[i] + df['close'].iloc[i]) / 2 / open_price - 1) * type * leverage)
@@ -613,31 +575,25 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['Final Lowerband'], label='Final Lowerband 1', color='green', linestyle='--', alpha=0.5)
         self.app.canvas.ax1.plot(df.index, df['Final Upperband'], label='Final Upperband 1', color='red', linestyle='--', alpha=0.5)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        open_price = 0
-        open_time = 0
-        type = 1  # 1 - long, -1 - short
-        current_balance = 100
-        balance = [[], []]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
-        position_size = 0.5
-        shtraf = 1
-        leverage = 2
+        balance = [[current_balance], [df.index[0]]]
+        position_size = 1
+        percent = int(len(df) / 100)
         trade_open = False
-        percent5 = int(len(df) / 50)
 
         for i in range(len(df)):
-            if i % percent5 == 0:
+            if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if df['low'].iloc[i] < df['Final Lowerband'].iloc[i-1]:
                     close_price = df['Final Lowerband'].iloc[i-1]
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0)
                     trade_open = False
                 elif df['high'].iloc[i] > df['Final Upperband'].iloc[i-1]:
                     close_price = df['Final Upperband'].iloc[i-1]
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0)
                     trade_open = False
                 else:
                     balance[0].append(current_balance + current_balance * position_size * ((df['open'].iloc[i] + df['close'].iloc[i]) / 2 / open_price - 1) * type * leverage)
@@ -662,29 +618,6 @@ class StrategyManager:
         balance[0].append(current_balance)
         balance[1].append(df.index[-1])
 
-        
-        wins = 0
-        losses = 0
-        winrate = 0
-        for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
-            if result == 1:
-                wins += 1
-            else:
-                losses += 1
-        if wins+losses == 0:
-            winrate = 0
-        else:
-            winrate = round(wins/(wins+losses)*100, ndigits=2)
-        profit = round((balance[0][-1]-balance[0][0])/balance[0][0]*100, ndigits=2)
-
-        
-        print(str('period: ' + str(period)))
-        print(str('multiplier: ' + str(multiplier)))
-
-        print(str('Profit: ' + str(profit)))
-        print(str('Winrate: ' + str(winrate)))
-        print(str('Trades: ' + str(wins+losses)+'\n'))
-        
 
         return transactions, balance
     
@@ -698,30 +631,24 @@ class StrategyManager:
         sti = self.Supertrend(df, period, multiplier)
         df = df.join(sti)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        open_price = 0
-        open_time = 0
-        type = 1  # 1 - long, -1 - short
-        current_balance = 100
-        balance = [[], []]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
-        position_size = 1.0
-        shtraf = 1
-        leverage = 2
+        balance = [[current_balance], [df.index[0]]]
+        position_size = 1
+        percent = int(len(df) / 100)
         trade_open = False
-        percent5 = int(len(df) / 50)
 
         self.app.canvas.ax1.plot(df.index, df['close'], label='price', color='white', alpha=0.5)
 
         for i in range(len(df)):
-            if i % percent5 == 0:
+            if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if df['low'].iloc[i] < df['Final Lowerband'].iloc[i-1]:
 
                     close_price = df['Final Lowerband'].iloc[i-1]
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size * shtraf, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size * shtraf, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0)
                     trade_open = False
                     if shtraf < 1:
                         shtraf += antishtraf
@@ -730,7 +657,7 @@ class StrategyManager:
                 elif df['high'].iloc[i] > df['Final Upperband'].iloc[i-1]:
 
                     close_price = df['Final Upperband'].iloc[i-1]
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size * shtraf, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size * shtraf, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0)
                     trade_open = False
                     if shtraf < 1:
                         shtraf += antishtraf
@@ -790,29 +717,25 @@ class StrategyManager:
         self.app.canvas.ax2.plot(df.index, df['q05'], label='q05', color='red', alpha=0.5)
         self.app.canvas.ax2.plot(df.index, df['q95'], label='q95', color='green', alpha=0.5)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        open_price = 0
-        open_time = 0
-        type = 1
-        current_balance = 100
-        position_size = 0.5
-        leverage = 2
-        profit_factor = 1.4
-        was_below = 0
-        trade_open = False
         balance = [[current_balance], [df.index[0]]]
-        percent = int(len(df) / 50)
+        position_size = 1
+        percent = int(len(df) / 100)
+        trade_open = False
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl)
                     was_below = 0
                     trade_open = False
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl)
                     was_below = 0
                     trade_open = False
                 else:
@@ -857,23 +780,17 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['Final Lowerband'], label='Final Lowerband', color='green', linestyle='--', alpha=0.5)
         self.app.canvas.ax1.plot(df.index, df['Final Upperband'], label='Final Upperband', color='red', linestyle='--', alpha=0.5)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        profit_factor = 1.5
+        balance = [[current_balance], [df.index[0]]]
+        position_size = 1
+        percent = int(len(df) / 100)
         open_price = []
         orders = 20
         order_num = 0
-        open_time = []
-        type = 1 # 1 - long, -1 - short
-        current_balance = 100
-        balance = [[],[]]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
-        position_size = []
-        leverage = 4
-        trade_open = False 
-        percent = int(len(df) / 50)
         mid_open_price = 0
-        tp = 0
+        trade_open = False
 
         for i in range(len(df)):
             if i % percent == 0:
@@ -881,7 +798,7 @@ class StrategyManager:
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
                     for j in range (0, order_num):
-                        transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size[j], leverage, open_price[j], open_time[j], tp, df.index[i], type, 0, 0, 0.0008)
+                        transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size[j], leverage, open_price[j], open_time[j], tp, df.index[i], type, 0, 0)
                     trade_open = False
                     open_price = []
                     position_size = []
@@ -941,7 +858,7 @@ class StrategyManager:
 
             if order_num == orders - 1:
                 for j in range (0, order_num):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size[j], leverage, open_price[j], open_time[j], df['close'].iloc[i], df.index[i], type, 0, 0, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size[j], leverage, open_price[j], open_time[j], df['close'].iloc[i], df.index[i], type, 0, 0)
                 trade_open = False
                 open_price = []
                 position_size = []
@@ -962,30 +879,25 @@ class StrategyManager:
         self.app.canvas.draw()
         self.app.show()
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        profit_factor = 1.4
-        open_price = 0
-        open_time = 0
-        type = 1 # 1 - long, -1 - short
-        current_balance = 100
-        balance = [[],[]]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
-        position_size = 0.5
-        leverage = 2
-        trade_open = False 
-        percent = int(len(df) / 50)
+        balance = [[current_balance], [df.index[0]]]
+        position_size = 1
+        percent = int(len(df) / 100)
+        trade_open = False
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl)
                     trade_open = False
                     
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl)
                     trade_open = False
 
                 else:
@@ -1027,30 +939,26 @@ class StrategyManager:
         self.app.canvas.draw()
         self.app.show()
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
         transactions = []
-        profit_factor = 1.4
-        open_price = 0
-        open_time = 0
-        type = 1 # 1 - long, -1 - short
-        current_balance = 100
-        balance = [[],[]]
-        balance[0].append(current_balance)
-        balance[1].append(df.index[0])
-        position_size = 0.5
-        leverage = 2
-        trade_open = False 
-        percent = int(len(df) / 50)
+        balance = [[current_balance], [df.index[0]]]
+        position_size = 1
+        percent = int(len(df) / 100)
+        trade_open = False
 
         for i in range(len(df)):
             if i % percent == 0:
                 self.set_bar_value(int(i / len(df) * 100))
+                
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl)
                     trade_open = False
                     
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, 0.0008)
+                    transactions, balance, current_balance = self.close(balance, transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl)
                     trade_open = False
 
                 else:

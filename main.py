@@ -223,6 +223,8 @@ class CryptoTradingApp(QWidget):
         self.current_theme = self.load_theme()  # Загружаем тему
         self.apply_theme()
 
+        self.load_settings()
+
         self.canvas.updateGeometry()
         self.show()
 
@@ -233,10 +235,11 @@ class CryptoTradingApp(QWidget):
 
     def load_settings(self):
         # Здесь можно применять настройки в логике программы
-        commission = self.settings.value("commission", "0.1")
-        initial_balance = self.settings.value("initial_balance", "1000")
-        leverage = self.settings.value("leverage", "1")
-        print(f"Загружены настройки: Комиссия: {commission}, Начальный баланс: {initial_balance}, Плечо: {leverage}")
+        self.commission = float(self.settings.value("commission", "0.0008"))
+        self.initial_balance = int(self.settings.value("initial_balance", "100"))
+        self.leverage = float(self.settings.value("leverage", "1"))
+        self.profit_factor = float(self.settings.value("profit_factor", "1.5"))
+        print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.leverage}")
 
 
     def create_vertical_separator(self):
