@@ -1,6 +1,6 @@
 
 import sys
-from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog
+from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog # type: ignore
 from PyQt5.QtGui import *  # type: ignore
 from PyQt5.QtCore import Qt, QSettings # type: ignore
 import requests # type: ignore
@@ -239,7 +239,9 @@ class CryptoTradingApp(QWidget):
         self.initial_balance = int(self.settings.value("initial_balance", "100"))
         self.leverage = float(self.settings.value("leverage", "1"))
         self.profit_factor = float(self.settings.value("profit_factor", "1.5"))
-        print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.leverage}")
+        self.position_type = self.settings.value("position_type", "percent")
+        self.position_size = float(self.settings.value("position_size", "100"))
+        print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, , Размер позиции: {self.position_size}, Тип: {self.position_type}")
 
 
     def create_vertical_separator(self):
@@ -410,7 +412,7 @@ class CryptoTradingApp(QWidget):
             wins = 0
             losses = 0
             winrate = 0
-            for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
+            for tp, sl, position_size, open_price, open_time, close_time, close_price, type, result, pnl in transactions:
                 if result == 1:
                     wins += 1
                 else:
@@ -419,13 +421,13 @@ class CryptoTradingApp(QWidget):
                 winrate = 0
             else:
                 winrate = round(wins/(wins+losses)*100, ndigits=2)
-            profit = round((balance[0][-1]-balance[0][0])/balance[0][0]*100, ndigits=2)
+            profit = round((float(balance[0][-1])-float(balance[0][0]))/float(balance[0][0])*100, ndigits=2)
 
 
             if len(df) <= 10000:
                 self.bar.setValue(0)
                 # Рисуем сделки 
-                for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
+                for tp, sl, position_size, open_price, open_time, close_time, close_price, type, result, pnl in transactions:
                     if type == 1:
                         self.canvas.ax1.plot(mdates.date2num(open_time), open_price, marker='^', color='lime', markersize=7)
                         self.canvas.ax1.plot(mdates.date2num(close_time), close_price, marker='X', color='salmon', markersize=7)
@@ -435,7 +437,7 @@ class CryptoTradingApp(QWidget):
                 self.bar.setValue(20)
 
                 # Рисуем области tp и sl 
-                for tp, sl, open_price, open_time, close_time, close_price, type, result in transactions:
+                for tp, sl, position_size, open_price, open_time, close_time, close_price, type, result, pnl in transactions:
                     if type == 1:
                         self.canvas.ax1.add_patch(plt.Rectangle(
                             (mdates.date2num(open_time), open_price),
@@ -464,26 +466,40 @@ class CryptoTradingApp(QWidget):
                         ))
 
             self.bar.setValue(40)
-            """
+            
             max_profit = 0.0
             patch_count = 10
             step = int((len(balance[0])-1)/patch_count)
             for i in range (0, len(balance[0])-1-step, step):
                 if abs((balance[0][i+step] - balance[0][i]) / balance[0][i]) > max_profit:
-                            max_profit = abs((balance[0][i+step] - balance[0][i]) / balance[0][i])
+                    max_profit = abs((balance[0][i+step] - balance[0][i]) / balance[0][i])
 
-            for i in range (8):
-                time_a = (balance[1][-1] - balance[1][0])/patch_count*i*0.99+balance[1][0]
-                time_b = (balance[1][-1] - balance[1][0])/patch_count*(i+1)*0.99+balance[1][0]
+            width = (balance[1][-1] - balance[1][0])/patch_count
+            print(len(balance[0]))
+            for i in range (patch_count-1):
+                time_a = width*i
+                time_b = width*(i+1)
+                
+                print(int(mdates.date2num(time_b)))
+                print(balance[0][i+step])
+                print(balance[0][i])
                 patch_color = '#089981' if balance[0][int(mdates.date2num(time_a))] > balance[0][int(mdates.date2num(time_b))] else '#F23645'
                 self.canvas.ax3.add_patch(plt.Rectangle(
-                            (time_a, min(balance[0])),
-                            (balance[1][-1] - balance[1][0])/patch_count,
-                            abs((balance[0][i+step] - balance[0][i]) / balance[0][i])/max_profit*(max(balance[0])-min(balance[0])),
+                            (time_a+balance[1][0], min(balance[0])),
+                            width,
+                            abs((balance[0][int(mdates.date2num(time_b))] - balance[0][int(mdates.date2num(time_a))]) / balance[0][int(mdates.date2num(time_a))])/max_profit*(max(balance[0])-min(balance[0])),
                             color=patch_color, alpha=0.1
-                        ))        
-            """
-
+                        )) 
+                
+            i = patch_count-1
+            time_a = width*i
+            patch_color = '#089981' if balance[0][int(mdates.date2num(time_a))] > balance[0][-1] else '#F23645'
+            self.canvas.ax3.add_patch(plt.Rectangle(
+                        (time_a+balance[1][0], min(balance[0])),
+                        width,
+                        abs((balance[0][int(mdates.date2num(time_b))] - balance[0][int(mdates.date2num(time_a))]) / balance[0][int(mdates.date2num(time_a))])/max_profit*(max(balance[0])-min(balance[0])),
+                        color=patch_color, alpha=0.1
+                    ))    
 
             # Рисуем баланс
             index = 0 
