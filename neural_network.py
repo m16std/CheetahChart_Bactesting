@@ -1,5 +1,7 @@
 from PyQt5.QtGui import *  # type: ignore
 from PyQt5.QtWidgets import QFileDialog  # type: ignore
+import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import pandas as pd # type: ignore
 import numpy as np # type: ignore
 import ta # type: ignore

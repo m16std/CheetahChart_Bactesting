@@ -134,13 +134,15 @@ class StrategyManager:
         # Рисуем индикаторы
         self.plot_macd(df)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        profit_factor = self.app.profit_factor
-        leverage = self.app.leverage
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -184,14 +186,15 @@ class StrategyManager:
         # Рисуем индикаторы
         self.plot_macd(df)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        profit_factor = self.app.profit_factor
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -235,13 +238,14 @@ class StrategyManager:
         # Рисуем индикаторы
         self.plot_macd(df)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -287,14 +291,15 @@ class StrategyManager:
         self.app.canvas.ax2.plot(df.index, df['macd_signal'], label='MACD Signal', color='orange', alpha = 0.5)
         self.app.canvas.ax1.plot(df.index, df['vwap'], label='VWAP', color='white', linestyle='--', alpha = 0.5)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        profit_factor = self.app.profit_factor
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -344,13 +349,14 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['bollinger_low'], label='BB Low', color='green', alpha = 0.5)
         self.app.canvas.ax1.plot(df.index, df['vwap'], label='VWAP', color='orange', linestyle='--', alpha = 0.5)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -408,14 +414,15 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['bollinger_high'], label='BB High', color='red', alpha = 0.5)
         self.app.canvas.ax1.plot(df.index, df['bollinger_low'], label='BB Low', color='green', alpha = 0.5)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        profit_factor = self.app.profit_factor
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -473,13 +480,14 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['Final Lowerband'], label='Final Lowerband', color='green', linestyle='--', alpha=0.5)
         self.app.canvas.ax1.plot(df.index, df['Final Upperband'], label='Final Upperband', color='red', linestyle='--', alpha=0.5)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -573,13 +581,14 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['Final Lowerband'], label='Final Lowerband 1', color='green', linestyle='--', alpha=0.5)
         self.app.canvas.ax1.plot(df.index, df['Final Upperband'], label='Final Upperband 1', color='red', linestyle='--', alpha=0.5)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -626,13 +635,14 @@ class StrategyManager:
         sti = self.Supertrend(df, period, multiplier)
         df = df.join(sti)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -708,14 +718,15 @@ class StrategyManager:
         self.app.canvas.ax2.plot(df.index, df['q05'], label='q05', color='red', alpha=0.5)
         self.app.canvas.ax2.plot(df.index, df['q95'], label='q95', color='green', alpha=0.5)
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        profit_factor = self.app.profit_factor
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -772,13 +783,14 @@ class StrategyManager:
         self.app.canvas.ax1.plot(df.index, df['Final Lowerband'], label='Final Lowerband', color='green', linestyle='--', alpha=0.5)
         self.app.canvas.ax1.plot(df.index, df['Final Upperband'], label='Final Upperband', color='red', linestyle='--', alpha=0.5)
 
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         open_price = []
@@ -872,15 +884,16 @@ class StrategyManager:
         self.app.canvas.ax2.plot(df.index, df['atr'], label='atr', color='yellow', alpha=0.5)
         self.app.canvas.draw()
         self.app.show()
+        
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
 
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        profit_factor = self.app.profit_factor
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
@@ -930,14 +943,15 @@ class StrategyManager:
         self.app.canvas.draw()
         self.app.show()
 
+        profit_factor = self.app.profit_factor
+        leverage = self.app.leverage
+        current_balance = self.app.initial_balance
+
         if self.app.position_type == "percent":
             position_size = self.app.position_size / 100 * current_balance
         else:
             position_size = self.app.position_size
 
-        profit_factor = self.app.profit_factor
-        leverage = self.app.leverage
-        current_balance = self.app.initial_balance
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False

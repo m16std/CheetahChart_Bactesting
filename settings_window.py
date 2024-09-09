@@ -54,11 +54,13 @@ class SettingsDialog(QDialog):
     def load_settings(self):
         # Загружаем сохраненные значения или устанавливаем по умолчанию
         self.commission_input.setText(self.settings.value("commission", "0.0008"))
-        self.initial_balance_input.setText(self.settings.value("initial_balance", "100"))
+        self.initial_balance_input.setText(self.settings.value("initial_balance", "1000"))
         self.leverage_input.setText(self.settings.value("leverage", "2"))
         self.profit_factor_input.setText(self.settings.value("profit_factor", "1.5"))
-        self.position_type = self.settings.value("position_type", "percent")
-        self.position_size = self.settings.value("position_size", "100")
+        self.position_size_input.setText(self.settings.value("position_size", "100"))
+
+        self.position_type = self.settings.value("position_type")
+        self.position_size = self.settings.value("position_size")
         if self.position_type == "percent":
             self.position_type_combo.setCurrentIndex(0)
         else:

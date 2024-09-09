@@ -2,7 +2,7 @@
 import sys
 from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog # type: ignore
 from PyQt5.QtGui import *  # type: ignore
-from PyQt5.QtCore import Qt, QSettings # type: ignore
+from PyQt5.QtCore import Qt, QSettings, QThread, pyqtSignal # type: ignore
 import requests # type: ignore
 import pandas as pd # type: ignore
 import matplotlib.pyplot as plt # type: ignore
@@ -16,8 +16,70 @@ from data_loader import FileManager
 from neural_network import AIManager
 from strategies import StrategyManager
 from settings_window import SettingsDialog
+from threading import Thread
 
 pd.options.mode.chained_assignment = None
+
+class DataDownloadThread(QThread):
+    # Сигнал, который можно отправить после завершения скачивания
+    data_downloaded = pyqtSignal(object)
+    progress_changed = pyqtSignal(int)
+
+    def __init__(self, parent=None):
+        super(DataDownloadThread, self).__init__(parent)
+        self.data = None
+
+    def __init__(self, symbol, interval, limit, parent=None):
+        super(DataDownloadThread, self).__init__(parent)
+        self.symbol = symbol
+        self.interval = interval
+        self.limit = limit
+
+    def run(self):
+        # Запускаем метод скачивания данных с переданными параметрами
+        data = self.get_okx_ohlcv(self.symbol, self.interval, self.limit)
+
+        # После завершения, сигнализируем об этом
+        self.data_downloaded.emit(data)
+
+        
+    def get_okx_ohlcv(self, symbol, interval, limit):
+        url = f'https://www.okx.com/api/v5/market/candles'
+        params = {
+            'instId': symbol,
+            'bar': interval,
+            'limit': 300
+        }
+        data = []
+        response = requests.get(url, params=params)
+        response = response.json()['data']
+        data.extend(response)
+        url = f'https://www.okx.com/api/v5/market/history-candles'
+        while len(data) < limit:
+            self.progress_changed.emit(round(len(data) / limit*100)) 
+            params = {
+                'instId': symbol,
+                'bar': interval,
+                'limit': 100,
+                'after': data[-1][0]
+            }
+            response = requests.get(url, params=params)
+            try:
+                response = response.json()['data']
+                data.extend(response)
+            except requests.exceptions.RequestException as err:
+                print(f"Error: {err}")
+                break
+
+        self.progress_changed.emit(100) 
+        data = data[::-1]
+
+        data = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
+        data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']] = data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']].astype(float)
+        data['ts'] = pd.to_datetime(data['ts'], unit='ms')
+        data.set_index('ts', inplace=True)
+
+        return data
 
 class MplCanvas(FigureCanvas):
 
@@ -28,6 +90,7 @@ class MplCanvas(FigureCanvas):
         super(MplCanvas, self).__init__(self.fig)
 
         self.ax2 = self.ax1.twinx()
+        self.ax4 = self.ax1.twinx()
         self.init_canvas(facecolor, textcolor)  # Инициализация настроек canvas
 
     def init_canvas(self, facecolor, textcolor):
@@ -48,25 +111,6 @@ class MplCanvas(FigureCanvas):
             tick.set_color(textcolor)
         for tick in self.ax3.get_yticklabels():
             tick.set_color(textcolor)
-
-        text = dict()
-        transform = self.ax1.transAxes
-        textprops = {'size': '10'}
-        text[0] = self.ax1.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = textcolor, **textprops)
-        text[1] = self.ax1.text(0, -0.075, '0%', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[2] = self.ax1.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = textcolor, **textprops)
-        text[3] = self.ax1.text(0.15, -0.075, '0%', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[4] = self.ax1.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = textcolor, **textprops)
-        text[5] = self.ax1.text(0.3, -0.075, '0', transform = transform, ha = 'left', color = textcolor, **textprops)
-        text[6] = self.ax1.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = textcolor, **textprops)
-        text[7] = self.ax1.text(0.45, -0.075, '0 days', transform = transform, ha = 'left', color = textcolor, **textprops)
-        text[8] = self.ax1.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = textcolor, **textprops)
-        text[9] = self.ax1.text(0.6, -0.075, '0 USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[10] = self.ax1.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = textcolor, **textprops)
-        text[11] = self.ax1.text(0.75, -0.075, '0 USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-        text[12] = self.ax1.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = textcolor, **textprops)
-        text[13] = self.ax1.text(0.9, -0.075, '0%', transform = transform, ha = 'left', color = '#F23645', **textprops)
-        text[14] = self.ax1.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = textcolor)
 
         plt.subplots_adjust(left=0.04, bottom=0.03, right=1, top=1, hspace=0.12)
 
@@ -90,6 +134,7 @@ class CryptoTradingApp(QWidget):
             pickle.dump(strategy_function, file) 
         
     def initUI(self):
+        self.df = []
         self.setWindowTitle('Cheetos Trading')
         #self.setStyleSheet("background-color: #151924;")
 
@@ -110,6 +155,7 @@ class CryptoTradingApp(QWidget):
 
         self.interval_input = QComboBox(self)
         self.interval_input.addItems(['1m', '5m', '15m','30m', '1H', '4H', '12H','1D'])
+        self.interval_input.setCurrentIndex(2)
 
         font = self.interval_input.font()
         font.setPointSize(font_size)
@@ -219,11 +265,21 @@ class CryptoTradingApp(QWidget):
             self.sizePolicy().Expanding
         )
 
+        self.text = []
+        self.text.append('0%') 
+        self.text.append('0%')
+        self.text.append('0')
+        self.text.append('0 days')
+        self.text.append('0 USDT')
+        self.text.append('0 USDT')
+        self.text.append('0%')
+        self.text.append('CheetosTrading')
+
         self.settings = QSettings("MyApp", "MyCompany")
+        self.load_settings()
         self.current_theme = self.load_theme()  # Загружаем тему
         self.apply_theme()
-
-        self.load_settings()
+        
 
         self.canvas.updateGeometry()
         self.show()
@@ -242,7 +298,6 @@ class CryptoTradingApp(QWidget):
         self.position_type = self.settings.value("position_type", "percent")
         self.position_size = float(self.settings.value("position_size", "100"))
         print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, , Размер позиции: {self.position_size}, Тип: {self.position_type}")
-
 
     def create_vertical_separator(self):
         # Создаем QFrame для вертикального разделителя
@@ -276,10 +331,12 @@ class CryptoTradingApp(QWidget):
                 }
             )
             self.canvas.update_colors(facecolor='#151924', textcolor = 'white')
+            self.plot_statistics(textcolor = 'white')
+                
         else:
-
             qdarktheme.setup_theme(self.current_theme)
             self.canvas.update_colors(facecolor='#ffffff', textcolor = 'black')
+            self.plot_statistics(textcolor = 'black')
 
     def toggle_theme(self):
         # Переключаем между темной и светлой темой
@@ -291,7 +348,7 @@ class CryptoTradingApp(QWidget):
         self.settings.setValue("theme", self.current_theme)
 
     def load_theme(self):
-        return self.settings.value("theme", "light")
+        return self.settings.value("theme")
     
     def open_and_run(self):
         if self.file_handler.load_candlesticks():
@@ -302,8 +359,19 @@ class CryptoTradingApp(QWidget):
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
 
-        self.df = self.get_okx_ohlcv(symbol, interval, limit)
-        
+        self.thread = DataDownloadThread(symbol, interval, limit)
+        self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
+        self.thread.data_downloaded.connect(self.on_data_downloaded)
+        self.thread.start()  # Запускаем поток
+
+    def on_progress_changed(self, value):
+        # Обновляем значение прогресс-бара
+        self.bar.setValue(value)
+
+    def on_data_downloaded(self, data):
+        # Метод, который будет вызван после завершения скачивания
+        self.df = data
+
         self.run_strategy()
 
     def get_strategy_from_name(self, name):
@@ -345,46 +413,6 @@ class CryptoTradingApp(QWidget):
         transactions, balance = self.current_strategy(self.df)
         self.plot_candlestick(self.df, transactions, balance)
 
-    def get_okx_ohlcv(self, symbol, interval, limit):
-        url = f'https://www.okx.com/api/v5/market/candles'
-        params = {
-            'instId': symbol,
-            'bar': interval,
-            'limit': 300
-        }
-        data = []
-        response = requests.get(url, params=params)
-        response = response.json()['data']
-        data.extend(response)
-        print ('DOWNLOAD')
-        url = f'https://www.okx.com/api/v5/market/history-candles'
-        while len(data) < limit:
-            print (str(round(len(data) / limit*100))+'%')
-            self.bar.setValue(round(len(data) / limit*100)) 
-            params = {
-                'instId': symbol,
-                'bar': interval,
-                'limit': 100,
-                'after': data[-1][0]
-            }
-            response = requests.get(url, params=params)
-            try:
-                response = response.json()['data']
-                data.extend(response)
-            except requests.exceptions.RequestException as err:
-                print(f"Error: {err}")
-                break
-
-        self.bar.setValue(100) 
-        data = data[::-1]
-
-        data = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
-        data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']] = data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']].astype(float)
-        data['ts'] = pd.to_datetime(data['ts'], unit='ms')
-        data.set_index('ts', inplace=True)
-
-        return data
-
     def plot_candlestick(self, df, transactions, balance):
         if self.current_theme == "dark":
             textcolor = 'white'
@@ -395,7 +423,7 @@ class CryptoTradingApp(QWidget):
         self.canvas.ax1.grid(True, axis='both', linewidth=0.3, color='gray')
         self.canvas.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
 
-        if len(df) <= 10000:
+        if len(df) <= 10000 and len(df) > 0:
                 percent5 = int(len(df) / 20)
                 index = 0 
                 # Рисуем свечи
@@ -467,39 +495,22 @@ class CryptoTradingApp(QWidget):
 
             self.bar.setValue(40)
             
+            # Квадратики на фоне баланса
             max_profit = 0.0
-            patch_count = 10
+            patch_count = 30
             step = int((len(balance[0])-1)/patch_count)
             for i in range (0, len(balance[0])-1-step, step):
                 if abs((balance[0][i+step] - balance[0][i]) / balance[0][i]) > max_profit:
                     max_profit = abs((balance[0][i+step] - balance[0][i]) / balance[0][i])
 
-            width = (balance[1][-1] - balance[1][0])/patch_count
-            print(len(balance[0]))
-            for i in range (patch_count-1):
-                time_a = width*i
-                time_b = width*(i+1)
-                
-                print(int(mdates.date2num(time_b)))
-                print(balance[0][i+step])
-                print(balance[0][i])
-                patch_color = '#089981' if balance[0][int(mdates.date2num(time_a))] > balance[0][int(mdates.date2num(time_b))] else '#F23645'
+            for i in range (0, len(balance[0])-1-step, step):
+                patch_color = '#089981' if (balance[0][i+step] - balance[0][i]) > 0 else '#F23645'
                 self.canvas.ax3.add_patch(plt.Rectangle(
-                            (time_a+balance[1][0], min(balance[0])),
-                            width,
-                            abs((balance[0][int(mdates.date2num(time_b))] - balance[0][int(mdates.date2num(time_a))]) / balance[0][int(mdates.date2num(time_a))])/max_profit*(max(balance[0])-min(balance[0])),
-                            color=patch_color, alpha=0.1
+                            (balance[1][i], min(balance[0])),
+                            (balance[1][-1] - balance[1][0])/patch_count*0.96,
+                            abs((balance[0][i+step] - balance[0][i]) / balance[0][i])/max_profit*(max(balance[0])-min(balance[0])),
+                            color=patch_color, alpha=0.2
                         )) 
-                
-            i = patch_count-1
-            time_a = width*i
-            patch_color = '#089981' if balance[0][int(mdates.date2num(time_a))] > balance[0][-1] else '#F23645'
-            self.canvas.ax3.add_patch(plt.Rectangle(
-                        (time_a+balance[1][0], min(balance[0])),
-                        width,
-                        abs((balance[0][int(mdates.date2num(time_b))] - balance[0][int(mdates.date2num(time_a))]) / balance[0][int(mdates.date2num(time_a))])/max_profit*(max(balance[0])-min(balance[0])),
-                        color=patch_color, alpha=0.1
-                    ))    
 
             # Рисуем баланс
             index = 0 
@@ -538,34 +549,52 @@ class CryptoTradingApp(QWidget):
 
 
             # Побочная инфа
-            text = dict()
-            transform = self.canvas.ax1.transAxes
-            textprops ={'size':'10'}
+            self.text = []
             period = balance[1][-1] - balance[1][0]
             period_days = f"{period.days} days"
+            self.text.append(str(winrate)+'%') 
+            self.text.append(str(profit)+'%')
+            self.text.append(str(wins+losses))
+            self.text.append(period_days)
+            self.text.append(str(balance[0][0])+' USDT')
+            self.text.append(str(round(balance[0][-1], ndigits=1))+' USDT')
+            self.text.append(str(round(max_drawdown, ndigits=1))+'%')
+            self.text.append('CheetosTrading')
 
-            text[0] = self.canvas.ax1.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = textcolor, **textprops)
-            text[1] = self.canvas.ax1.text(0, -0.075, str(winrate)+'%', transform = transform, ha = 'left', color = '#089981', **textprops)
-            text[2] = self.canvas.ax1.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = textcolor, **textprops)
-            text[3] = self.canvas.ax1.text(0.15, -0.075, str(profit)+'%', transform = transform, ha = 'left', color = '#089981', **textprops)
-            text[4] = self.canvas.ax1.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = textcolor, **textprops)
-            text[5] = self.canvas.ax1.text(0.3, -0.075, str(wins+losses), transform = transform, ha = 'left', color = textcolor, **textprops)
-            text[6] = self.canvas.ax1.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = textcolor, **textprops)
-            text[7] = self.canvas.ax1.text(0.45, -0.075, period_days, transform = transform, ha = 'left', color = textcolor, **textprops)
-            text[8] = self.canvas.ax1.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = textcolor, **textprops)
-            text[9] = self.canvas.ax1.text(0.6, -0.075, str(balance[0][0])+' USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-            text[10] = self.canvas.ax1.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = textcolor, **textprops)
-            text[11] = self.canvas.ax1.text(0.75, -0.075, str(round(balance[0][-1], ndigits=1))+' USDT', transform = transform, ha = 'left', color = '#089981', **textprops)
-            text[12] = self.canvas.ax1.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = textcolor, **textprops)
-            text[13] = self.canvas.ax1.text(0.9, -0.075, str(round(max_drawdown, ndigits=1))+'%', transform = transform, ha = 'left', color = '#F23645', **textprops)
-            text[14] = self.canvas.ax1.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = textcolor)
-        
+            self.plot_statistics(textcolor)
+
         # Легенды
         self.canvas.ax1.legend(loc='upper left', edgecolor='white') 
         self.canvas.ax2.legend(loc='upper right', edgecolor='white')
         self.canvas.ax3.legend(loc='upper left', edgecolor='white')
 
         self.bar.setValue(100)
+        self.canvas.draw()
+        self.show()
+
+    def plot_statistics(self, textcolor):
+
+        self.canvas.ax4.clear()
+
+        transform = self.canvas.ax4.transAxes
+        textprops = {'size': '10'}
+
+        self.canvas.ax4.text(0, -0.04, 'Winrate', transform = transform, ha = 'left', color = textcolor, **textprops)
+        self.canvas.ax4.text(0, -0.075, self.text[0], transform = transform, ha = 'left', color = '#089981', **textprops)
+        self.canvas.ax4.text(0.15, -0.04, 'Profit', transform = transform, ha = 'left', color = textcolor, **textprops)
+        self.canvas.ax4.text(0.15, -0.075, self.text[1], transform = transform, ha = 'left', color = '#089981', **textprops)
+        self.canvas.ax4.text(0.3, -0.04, 'Trades', transform = transform, ha = 'left', color = textcolor, **textprops)
+        self.canvas.ax4.text(0.3, -0.075, self.text[2], transform = transform, ha = 'left', color = textcolor, **textprops)
+        self.canvas.ax4.text(0.45, -0.04, 'Period', transform = transform, ha = 'left', color = textcolor, **textprops)
+        self.canvas.ax4.text(0.45, -0.075, self.text[3], transform = transform, ha = 'left', color = textcolor, **textprops)
+        self.canvas.ax4.text(0.6, -0.04, 'Initial balance', transform = transform, ha = 'left', color = textcolor, **textprops)
+        self.canvas.ax4.text(0.6, -0.075, self.text[4], transform = transform, ha = 'left', color = '#089981', **textprops)
+        self.canvas.ax4.text(0.75, -0.04, 'Final balance', transform = transform, ha = 'left', color = textcolor, **textprops)
+        self.canvas.ax4.text(0.75, -0.075, self.text[5], transform = transform, ha = 'left', color = '#089981', **textprops)
+        self.canvas.ax4.text(0.9, -0.04, 'Max drawdown', transform = transform, ha = 'left', color = textcolor, **textprops)
+        self.canvas.ax4.text(0.9, -0.075, self.text[6], transform = transform, ha = 'left', color = '#F23645', **textprops)
+        self.canvas.ax4.text(0.01, 0.02, 'CheetosTrading', transform = transform, ha = 'left', color = textcolor) 
+
         self.canvas.draw()
         self.show()
 
