@@ -1,6 +1,6 @@
 ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня 
 
-![jC5pJBm06cI](https://github.com/user-attachments/assets/ca799576-1f42-40d2-b748-bb2217d11586)
+![image](https://github.com/user-attachments/assets/75052417-406c-49df-ba34-6f11da6a0811)
 
 ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня ня 
 ня ня ня ня ня ня ня ня ня 
