@@ -1,131 +1,27 @@
-
 import sys
 from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog # type: ignore
 from PyQt5.QtGui import *  # type: ignore
 from PyQt5.QtCore import Qt, QSettings, QThread, pyqtSignal # type: ignore
-import requests # type: ignore
 import pandas as pd # type: ignore
 import matplotlib.pyplot as plt # type: ignore
 import matplotlib.dates as mdates # type: ignore
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # type: ignore
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar # type: ignore
 import qdarktheme # type: ignore
 import numpy as np # type: ignore
 import pickle
-from data_loader import FileManager 
+from file_manager import FileManager 
 from neural_network import AIManager
 from strategies import StrategyManager
 from settings_window import SettingsDialog
-from threading import Thread
+from data_loader import DataDownloadThread
+from mpl_canvas import MPlCanvas
 
 pd.options.mode.chained_assignment = None
-
-class DataDownloadThread(QThread):
-    # Сигнал, который можно отправить после завершения скачивания
-    data_downloaded = pyqtSignal(object)
-    progress_changed = pyqtSignal(int)
-
-    def __init__(self, parent=None):
-        super(DataDownloadThread, self).__init__(parent)
-        self.data = None
-
-    def __init__(self, symbol, interval, limit, parent=None):
-        super(DataDownloadThread, self).__init__(parent)
-        self.symbol = symbol
-        self.interval = interval
-        self.limit = limit
-
-    def run(self):
-        # Запускаем метод скачивания данных с переданными параметрами
-        data = self.get_okx_ohlcv(self.symbol, self.interval, self.limit)
-
-        # После завершения, сигнализируем об этом
-        self.data_downloaded.emit(data)
-
-        
-    def get_okx_ohlcv(self, symbol, interval, limit):
-        url = f'https://www.okx.com/api/v5/market/candles'
-        params = {
-            'instId': symbol,
-            'bar': interval,
-            'limit': 300
-        }
-        data = []
-        response = requests.get(url, params=params)
-        response = response.json()['data']
-        data.extend(response)
-        url = f'https://www.okx.com/api/v5/market/history-candles'
-        while len(data) < limit:
-            self.progress_changed.emit(round(len(data) / limit*100)) 
-            params = {
-                'instId': symbol,
-                'bar': interval,
-                'limit': 100,
-                'after': data[-1][0]
-            }
-            response = requests.get(url, params=params)
-            try:
-                response = response.json()['data']
-                data.extend(response)
-            except requests.exceptions.RequestException as err:
-                print(f"Error: {err}")
-                break
-
-        self.progress_changed.emit(100) 
-        data = data[::-1]
-
-        data = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
-        data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']] = data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']].astype(float)
-        data['ts'] = pd.to_datetime(data['ts'], unit='ms')
-        data.set_index('ts', inplace=True)
-
-        return data
-
-class MplCanvas(FigureCanvas):
-
-    def __init__(self, facecolor, textcolor):
-        self.fig, (self.ax1, self.ax3) = plt.subplots(2, 1, figsize=(12, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, facecolor=facecolor)
-
-        # Вызов конструктора базового класса FigureCanvas
-        super(MplCanvas, self).__init__(self.fig)
-
-        self.ax2 = self.ax1.twinx()
-        self.ax4 = self.ax1.twinx()
-        self.init_canvas(facecolor, textcolor)  # Инициализация настроек canvas
-
-    def init_canvas(self, facecolor, textcolor):
-        """Метод для инициализации или обновления цветов"""
-        self.fig.patch.set_facecolor(facecolor)
-        self.ax1.set_facecolor(facecolor)
-        self.ax3.set_facecolor(facecolor)
-
-        # Обновляем цвета для осей и текста
-        self.ax1.tick_params(colors=textcolor, direction='out')
-        for tick in self.ax1.get_xticklabels():
-            tick.set_color(textcolor)
-        for tick in self.ax1.get_yticklabels():
-            tick.set_color(textcolor)
-
-        self.ax3.tick_params(colors=textcolor, direction='out')
-        for tick in self.ax3.get_xticklabels():
-            tick.set_color(textcolor)
-        for tick in self.ax3.get_yticklabels():
-            tick.set_color(textcolor)
-
-        plt.subplots_adjust(left=0.04, bottom=0.03, right=1, top=1, hspace=0.12)
-
-        # Перерисовываем график
-        self.draw()
-
-    def update_colors(self, facecolor, textcolor):
-        """Метод для обновления цветов и перерисовки"""
-        self.init_canvas(facecolor, textcolor)
 
 class CryptoTradingApp(QWidget):
     def __init__(self):
         super().__init__()
         self.file_handler = FileManager(self)
-        self.strategy_manager = StrategyManager(self)
         self.ai_manager = AIManager(self)
         self.initUI()       
 
@@ -175,7 +71,7 @@ class CryptoTradingApp(QWidget):
         self.bar.setAlignment(Qt.AlignCenter) 
 
         self.strat_input = QComboBox(self)
-        self.strat_input.addItems(['MA-50 cross MA-200', 'RSI', 'DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Supertrend v2','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
+        self.strat_input.addItems(['MA-50 cross MA-200', 'RSI', 'DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Triple Supertrend','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
 
         font = self.strat_input.font()
         font.setPointSize(font_size)
@@ -195,8 +91,8 @@ class CryptoTradingApp(QWidget):
 
         button_layout.addWidget(self.create_vertical_separator())
         
-        self.load_button = QPushButton('Load candlesticks', self)
-        self.load_button.clicked.connect(self.file_handler.save_candlesticks)
+        self.load_button = QPushButton('Download candlesticks', self)
+        self.load_button.clicked.connect(self.download_and_save_candlesticks)
         self.load_button.setStyleSheet("border: none; font-size: 12px; ")
         button_layout.addWidget(self.load_button)
 
@@ -250,7 +146,7 @@ class CryptoTradingApp(QWidget):
         layout.addLayout(hbox_layout)
 
         # Создаем canvas и добавляем в layout
-        self.canvas = MplCanvas(facecolor='#151924', textcolor = 'white')
+        self.canvas = MPlCanvas(facecolor='#151924', textcolor = 'white')
         layout.addWidget(self.canvas)
 
         self.toolbar = NavigationToolbar(self.canvas, self)
@@ -358,62 +254,55 @@ class CryptoTradingApp(QWidget):
         symbol = self.symbol_input.currentText()
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
+        run = True
 
-        self.thread = DataDownloadThread(symbol, interval, limit)
+        self.thread = DataDownloadThread(symbol, interval, limit, run)
         self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
-        self.thread.data_downloaded.connect(self.on_data_downloaded)
+        self.thread.data_downloaded_run_it.connect(self.on_data_downloaded_run_it)
+        self.thread.data_downloaded_save_it.connect(self.on_data_downloaded_save_it)
         self.thread.start()  # Запускаем поток
 
     def on_progress_changed(self, value):
         # Обновляем значение прогресс-бара
         self.bar.setValue(value)
 
-    def on_data_downloaded(self, data):
+    def on_data_downloaded_run_it(self, data):
         # Метод, который будет вызван после завершения скачивания
         self.df = data
-
         self.run_strategy()
 
-    def get_strategy_from_name(self, name):
-        current_strategy = self.strategy_manager.macd_strategy
-        if name == "MACD":
-            current_strategy = self.strategy_manager.macd_strategy
-        elif name == "MACD v2":
-            current_strategy = self.strategy_manager.macd_v2_strategy
-        elif name == "Bollinger + VWAP":
-            current_strategy = self.strategy_manager.bollinger_vwap_strategy
-        elif name == "Bollinger v2":
-            current_strategy = self.strategy_manager.bollinger_v2
-        elif name == "Supertrend":
-            current_strategy = self.strategy_manager.supertrend_strategy
-        elif name == "Supertrend v2":
-            current_strategy = self.strategy_manager.supertrend_v2
-        elif name == "MACD v3":
-            current_strategy = self.strategy_manager.macd_v3_strategy
-        elif name == "MACD VWAP":
-            current_strategy = self.strategy_manager.macd_vwap_strategy
-        elif name == "Hawkes Process":
-            current_strategy = self.strategy_manager.hawkes_process_strategy
-        elif name == "Supertrend v3 SOLANA 1H SETUP":
-            current_strategy = self.strategy_manager.supertrend_v3
-        elif name == "DCA":
-            current_strategy = self.strategy_manager.dca_strategy
-        elif name == "RSI":
-            current_strategy = self.strategy_manager.rsi_strategy
-        elif name == "MA-50 cross MA-200":
-            current_strategy = self.strategy_manager.ma50200_cross_strategy
-
-        return current_strategy
+    def on_data_downloaded_save_it(self, data):
+        # Метод, который будет вызван после завершения скачивания
+        self.df = data
+        self.file_handler.save_candlesticks()
+    
+    def download_and_save_candlesticks(self):
+        symbol = self.symbol_input.currentText()
+        interval = self.interval_input.currentText()
+        limit = self.limit_input.value()
+        run = False
+    
+        self.thread = DataDownloadThread(symbol, interval, limit, run)
+        self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
+        self.thread.data_downloaded_run_it.connect(self.on_data_downloaded_run_it)
+        self.thread.data_downloaded_save_it.connect(self.on_data_downloaded_save_it)
+        self.thread.start()
 
     def run_strategy(self):
-        self.current_strategy = self.get_strategy_from_name(self.strat_input.currentText())
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
         self.canvas.ax3.clear()
-        transactions, balance = self.current_strategy(self.df)
-        self.plot_candlestick(self.df, transactions, balance)
 
-    def plot_candlestick(self, df, transactions, balance):
+        self.thread = StrategyManager(self.strat_input.currentText(), self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
+        self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
+        self.thread.calculation_complete.connect(self.on_calculation_complete)
+        self.thread.start() 
+    
+    def on_calculation_complete(self, transactions, balance, indicators):
+        # Метод, который будет вызван после завершения скачивания
+        self.plot_candlestick(self.df, transactions, balance, indicators)
+
+    def plot_candlestick(self, df, transactions, balance, indicators):
         if self.current_theme == "dark":
             textcolor = 'white'
         else:
@@ -423,7 +312,15 @@ class CryptoTradingApp(QWidget):
         self.canvas.ax1.grid(True, axis='both', linewidth=0.3, color='gray')
         self.canvas.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
 
-        if len(df) <= 10000 and len(df) > 0:
+        if len(df) <= 5000 and len(df) > 0:
+                
+                # Проходим по колонкам и строим графики
+                for column in indicators:
+                    if column in df.columns:
+                        self.canvas.ax2.plot(df.index, df[column], label=column)
+                    else:
+                        print(f"Колонка '{column}' отсутствует в DataFrame.")
+
                 percent5 = int(len(df) / 20)
                 index = 0 
                 # Рисуем свечи

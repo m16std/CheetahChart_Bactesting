@@ -1,46 +1,72 @@
-from PyQt5.QtWidgets import QFileDialog  # type: ignore
 from PyQt5.QtGui import *  # type: ignore
-import pandas as pd # type: ignore   
-import joblib  # type: ignore 
+from PyQt5.QtCore import QThread, pyqtSignal # type: ignore
+import requests # type: ignore
+import pandas as pd # type: ignore
 
-class FileManager:
-    def __init__(self, app):
-        self.app = app
 
-    def save_candlesticks(self):
-        symbol = self.app.symbol_input.currentText()
-        interval = self.app.interval_input.currentText()
-        limit = self.app.limit_input.value()
-        self.app.df = self.app.get_okx_ohlcv(symbol, interval, limit)
+class DataDownloadThread(QThread):
+    # Сигнал завершения скачивания
+    data_downloaded_save_it = pyqtSignal(object)
+    data_downloaded_run_it = pyqtSignal(object)
+    # Сигнал обновления прогресс-бара
+    progress_changed = pyqtSignal(int)
 
-        file_name, _ = QFileDialog.getSaveFileName(self.app, "Сохранить свечки", "", "CSV Files (*.csv)")
-        if file_name:
-            self.app.df.to_csv(file_name)
-            print(f"Candlestick data saved to {file_name}")
-            return True
+    def __init__(self, parent=None):
+        super(DataDownloadThread, self).__init__(parent)
+
+    def __init__(self, symbol, interval, limit, run_or_save, parent=None):
+        super(DataDownloadThread, self).__init__(parent)
+        self.symbol = symbol
+        self.interval = interval
+        self.limit = limit
+        self.run_or_save = run_or_save
+
+    def run(self):
+        # Запускаем метод скачивания данных с переданными параметрами
+        data = self.get_okx_ohlcv(self.symbol, self.interval, self.limit)
+
+        # После завершения сигнализируем об этом
+        if self.run_or_save:
+            self.data_downloaded_run_it.emit(data)
         else:
-            return False
+            self.data_downloaded_save_it.emit(data)
 
-    def load_candlesticks(self):
-        file_name, _ = QFileDialog.getOpenFileName(self.app, "Открыть свечки", "", "CSV Files (*.csv)")
-        if file_name:
-            self.app.df = pd.read_csv(file_name, index_col=0, parse_dates=True)
-            print(f"Candlestick data loaded from {file_name}")
-            return True
-        return False
+        
+    def get_okx_ohlcv(self, symbol, interval, limit):
+        url = f'https://www.okx.com/api/v5/market/candles'
+        params = {
+            'instId': symbol,
+            'bar': interval,
+            'limit': 300
+        }
+        data = []
+        response = requests.get(url, params=params)
+        response = response.json()['data']
+        data.extend(response)
+        url = f'https://www.okx.com/api/v5/market/history-candles'
+        while len(data) < limit:
+            self.progress_changed.emit(round(len(data) / limit*100)) 
+            params = {
+                'instId': symbol,
+                'bar': interval,
+                'limit': 100,
+                'after': data[-1][0]
+            }
+            response = requests.get(url, params=params)
+            try:
+                response = response.json()['data']
+                data.extend(response)
+            except requests.exceptions.RequestException as err:
+                print(f"Error: {err}")
+                break
 
-    def save_model_dialog(self):
-        options = QFileDialog.Options()
-        file_name, _ = QFileDialog.getSaveFileName(self.app, "Сохранить модель", "", "Model Files (*.pkl);;All Files (*)", options=options)
-        if file_name:
-            joblib.dump(self.app.model, file_name)
-            return True
-        return False
+        self.progress_changed.emit(100) 
+        data = data[::-1]
 
-    def load_model_dialog(self):
-        options = QFileDialog.Options()
-        file_name, _ = QFileDialog.getOpenFileName(self.app, "Открыть модель", "", "Model Files (*.pkl);;All Files (*)", options=options)
-        if file_name:
-            self.app.model = joblib.load(file_name)
-            return True
-        return False
+        data = pd.DataFrame(data, columns=['ts', 'open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote', 'confirm'])
+        data['ts'] = pd.to_numeric(data['ts'], errors='coerce')
+        data['ts'] = pd.to_datetime(data['ts'], unit='ms')
+        data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']] = data[['open', 'high', 'low', 'close', 'volume', 'volCcy', 'volCcyQuote']].astype(float)
+        data.set_index('ts', inplace=True)
+
+        return data
