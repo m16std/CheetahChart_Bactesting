@@ -664,6 +664,9 @@ class StrategyManager(QThread):
         transactions = []
         percent = int(len(df) / 100)
         open_price = []
+        position_sizes = []
+        open_time = []
+
         orders = 20
         order_num = 0
         mid_open_price = 0
@@ -675,10 +678,10 @@ class StrategyManager(QThread):
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
                     for j in range (0, order_num):
-                        transactions, current_balance = self.close(balance, transactions, current_balance, position_sizes[j], leverage, open_price[j], open_time[j], tp, df.index[i], type, 0, 0, commission)
+                        transactions, current_balance = self.close(transactions, current_balance, position_sizes[j], leverage, open_price[j], open_time[j], tp, df.index[i], type, 0, 0, commission)
                     trade_open = False
                     open_price = []
-                    position_size = []
+                    position_sizes = []
                     open_time = []
                     mid_open_price = 0
                     order_num = 0
@@ -717,24 +720,22 @@ class StrategyManager(QThread):
                     order_num += 1   
                     mid_open_price = 0
                     for j in range (0, order_num):
-                        mid_open_price += open_price[j] * position_sizes[j]
+                        mid_open_price += open_price[j] 
                     mid_open_price /= order_num
-                    mid_open_price *= orders
                     open_time.append(df.index[i])
                     tp = mid_open_price * 1.01
                 elif df['close'].iloc[i] > open_price[order_num] and type == -1:
                     order_num += 1
                     mid_open_price = 0
                     for j in range (0, order_num):
-                        mid_open_price += open_price[j] * position_sizes[j]
+                        mid_open_price += open_price[j]
                     mid_open_price /= order_num
-                    mid_open_price *= orders
                     open_time.append(df.index[i])
                     tp = mid_open_price * 0.99               
 
             if order_num == orders - 1:
                 for j in range (0, order_num):
-                    transactions, current_balance = self.close(balance, transactions, current_balance, position_sizes[j], leverage, open_price[j], open_time[j], df['close'].iloc[i], df.index[i], type, 0, 0)
+                    transactions, current_balance = self.close(transactions, current_balance, position_sizes[j], leverage, open_price[j], open_time[j], df['close'].iloc[i], df.index[i], type, 0, 0, commission)
                 trade_open = False
                 open_price = []
                 position_sizes = []

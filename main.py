@@ -119,10 +119,24 @@ class CryptoTradingApp(QWidget):
 
         button_layout.addWidget(self.create_vertical_separator())
 
+        self.rai_button = QPushButton('Export strategy', self)
+        self.rai_button.setStyleSheet("border: none; font-size: 12px; ")
+        button_layout.addWidget(self.rai_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
+
+        self.rai_button = QPushButton('Open strategy', self)
+        self.rai_button.setStyleSheet("border: none; font-size: 12px; ")
+        button_layout.addWidget(self.rai_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
+
         self.toggle_theme_button = QPushButton("Switch Theme")
         self.toggle_theme_button.clicked.connect(self.toggle_theme)
         self.toggle_theme_button.setStyleSheet("border: none; font-size: 12px; ")
         button_layout.addWidget(self.toggle_theme_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
 
         self.settings_button = QPushButton("Settings")
         self.settings_button.clicked.connect(self.open_settings_dialog)
@@ -194,25 +208,16 @@ class CryptoTradingApp(QWidget):
         self.position_type = self.settings.value("position_type", "percent")
         self.position_size = float(self.settings.value("position_size", "100"))
         print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, , Размер позиции: {self.position_size}, Тип: {self.position_type}")
-
+    
     def create_vertical_separator(self):
         # Создаем QFrame для вертикального разделителя
         separator = QFrame()
-        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShape(QFrame.VLine)  # Вертикальная линия
         separator.setFrameShadow(QFrame.Sunken)
         separator.setStyleSheet("color: gray; background-color: gray;")
-        separator.setFixedWidth(2)
+        separator.setFixedWidth(2)  # Устанавливаем фиксированную ширину линии
 
-        # Создаем виджет-контейнер для разделителя
-        container = QWidget()
-        vbox = QVBoxLayout()
-        vbox.addStretch(1)  # Добавляем отступ сверху
-        vbox.addWidget(separator)
-        vbox.addStretch(1)  # Добавляем отступ снизу
-        vbox.setContentsMargins(0, 0, 0, 0)  # Убираем отступы по краям
-        container.setLayout(vbox)
-
-        return container
+        return separator
 
     def apply_theme(self):
         if self.current_theme == "dark":
@@ -227,12 +232,12 @@ class CryptoTradingApp(QWidget):
                 }
             )
             self.canvas.update_colors(facecolor='#151924', textcolor = 'white')
-            self.plot_statistics(textcolor = 'white')
+            self.plot_statistics()
                 
         else:
             qdarktheme.setup_theme(self.current_theme)
             self.canvas.update_colors(facecolor='#ffffff', textcolor = 'black')
-            self.plot_statistics(textcolor = 'black')
+            self.plot_statistics()
 
     def toggle_theme(self):
         # Переключаем между темной и светлой темой
@@ -299,7 +304,7 @@ class CryptoTradingApp(QWidget):
         self.thread.start() 
     
     def on_calculation_complete(self, transactions, balance, indicators):
-        # Метод, который будет вызван после завершения скачивания
+        # Метод, который будет вызван после выполнения стратегии
         self.plot_candlestick(self.df, transactions, balance, indicators)
 
     def plot_candlestick(self, df, transactions, balance, indicators):
@@ -313,25 +318,25 @@ class CryptoTradingApp(QWidget):
         self.canvas.ax3.grid(True, axis='both', linewidth=0.3, color='gray', which="both")
 
         if len(df) <= 5000 and len(df) > 0:
-                
-                # Проходим по колонкам и строим графики
-                for column in indicators:
-                    if column in df.columns:
-                        self.canvas.ax2.plot(df.index, df[column], label=column)
-                    else:
-                        print(f"Колонка '{column}' отсутствует в DataFrame.")
+            
+            # Строим графики индикаторов
+            for column in indicators:
+                if column in df.columns:
+                    self.canvas.ax2.plot(df.index, df[column], label=column, alpha=0.3)
+                else:
+                    print(f"Индикатор '{column}' отсутствует в DataFrame.")
 
-                percent5 = int(len(df) / 20)
-                index = 0 
-                # Рисуем свечи
-                candlestick_data = zip(mdates.date2num(df.index.to_pydatetime()), df['open'], df['high'], df['low'], df['close'])
-                for date, open, high, low, close in candlestick_data:
-                    if index % percent5 == 0:
-                        self.bar.setValue(int(index / len(df) * 100))
-                    index += 1
-                    color = '#089981' if close >= open else '#F23645'
-                    self.canvas.ax1.plot([date, date], [low, high], color=color, linewidth=0.8)
-                    self.canvas.ax1.plot([date, date], [open, close], color=color, linewidth=2)
+            percent5 = int(len(df) / 20)
+            index = 0 
+            # Рисуем свечи
+            candlestick_data = zip(mdates.date2num(df.index.to_pydatetime()), df['open'], df['high'], df['low'], df['close'])
+            for date, open, high, low, close in candlestick_data:
+                if index % percent5 == 0:
+                    self.bar.setValue(int(index / len(df) * 100))
+                index += 1
+                color = '#089981' if close >= open else '#F23645'
+                self.canvas.ax1.plot([date, date], [low, high], color=color, linewidth=0.8)
+                self.canvas.ax1.plot([date, date], [open, close], color=color, linewidth=2)
 
         if len(balance[0]) > 0 and len(transactions) > 0:
             wins = 0
@@ -445,7 +450,7 @@ class CryptoTradingApp(QWidget):
                 label.set_color(textcolor)
 
 
-            # Побочная инфа
+            # Статистика
             self.text = []
             period = balance[1][-1] - balance[1][0]
             period_days = f"{period.days} days"
@@ -458,21 +463,31 @@ class CryptoTradingApp(QWidget):
             self.text.append(str(round(max_drawdown, ndigits=1))+'%')
             self.text.append('CheetosTrading')
 
-            self.plot_statistics(textcolor)
+            self.plot_statistics()
 
         # Легенды
-        self.canvas.ax1.legend(loc='upper left', edgecolor='white') 
+        self.canvas.ax1.legend([str(self.symbol_input.currentText()+' OKX')], loc='upper left', edgecolor='white') 
         self.canvas.ax2.legend(loc='upper right', edgecolor='white')
         self.canvas.ax3.legend(loc='upper left', edgecolor='white')
+
+        # Переустановка форматтера оси X для ax1
+        locator = mdates.AutoDateLocator()
+        formatter = mdates.ConciseDateFormatter(locator)
+        self.canvas.ax1.xaxis.set_major_locator(locator)
+        self.canvas.ax1.xaxis.set_major_formatter(formatter)
 
         self.bar.setValue(100)
         self.canvas.draw()
         self.show()
 
-    def plot_statistics(self, textcolor):
+    def plot_statistics(self):
+
+        if self.current_theme == "dark":
+            textcolor = 'white'
+        else:
+            textcolor = 'black'
 
         self.canvas.ax4.clear()
-
         transform = self.canvas.ax4.transAxes
         textprops = {'size': '10'}
 
@@ -496,7 +511,6 @@ class CryptoTradingApp(QWidget):
         self.show()
 
 
-
 def main():
     app = QApplication(sys.argv)
     qdarktheme.setup_theme("dark")  # Начальная тема
@@ -507,3 +521,33 @@ def main():
 if __name__ == '__main__':
     main()
 
+"""
+def plot_balance(self, balance_data, initial_balance):
+    # Очистка оси для графика баланса
+    self.canvas.ax1.clear()
+
+    # Проходим по каждому интервалу, разделяя его на участки выше и ниже начального баланса
+    above_initial = balance_data >= initial_balance
+    below_initial = balance_data < initial_balance
+
+    # Функция для отрисовки непрерывных участков
+    def plot_segment(data, mask, color, label=None):
+        # Ищем начало и конец каждой непрерывной области
+        start_idx = None
+        for i in range(len(mask)):
+            if mask[i] and start_idx is None:
+                start_idx = i
+            elif not mask[i] and start_idx is not None:
+                # Рисуем участок от start_idx до текущего i
+                self.canvas.ax1.plot(data.index[start_idx:i], data[start_idx:i], color=color, label=label if start_idx == 0 else "")
+                start_idx = None
+        if start_idx is not None:
+            # Рисуем оставшийся участок в конце
+            self.canvas.ax1.plot(data.index[start_idx:], data[start_idx:], color=color, label=label if start_idx == 0 else "")
+
+    # Отрисовка участков баланса выше начального
+    plot_segment(balance_data, above_initial, 'green', label='Above Initial Balance')
+
+    # Отрисовка участков баланса ниже начального
+    plot_segment(balance_data, below_initial, 'red', label='Below Initial Balance')
+"""
