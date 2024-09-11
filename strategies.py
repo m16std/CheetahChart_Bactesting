@@ -101,7 +101,7 @@ class StrategyManager(QThread):
             tp = open_price - (sl - open_price) * profit_factor
         return tp, sl
 
-    def Supertrend(self, df, atr_period, multiplier, index = 0):
+    def Supertrend(self, df, atr_period, multiplier, additional_index = 0):
         high = df['high']
         low = df['low']
         close = df['close']
@@ -145,7 +145,9 @@ class StrategyManager(QThread):
             else:
                 final_lowerband.iloc[i] = np.nan
 
-        if index == 0:
+        print(f'Final Lowerband {additional_index}' == 'Final Lowerband 0')
+
+        if additional_index == 0:
             return pd.DataFrame({
                 'Supertrend': supertrend,
                 'Final Lowerband': final_lowerband,
@@ -153,31 +155,31 @@ class StrategyManager(QThread):
             }, index=df.index)
         else:
             return pd.DataFrame({
-                'Supertrend {index}': supertrend,
-                'Final Lowerband {index}': final_lowerband,
-                'Final Upperband {index}': final_upperband
+                f'Supertrend {additional_index}': supertrend,
+                f'Final Lowerband {additional_index}': final_lowerband,
+                f'Final Upperband {additional_index}': final_upperband
             }, index=df.index)
 
     def calculate_balance(self, df, transactions, initial_balance, leverage):
         current_balance = initial_balance
-        balance = [[], []]
+        balance = []
         i = 0
 
         for tp, sl, position_size, open_price, open_time, close_time, close_price, type, result, pnl in transactions:
             while df.index[i] <= open_time and df.index[i] < df.index[-1]:
-                balance[0].append(current_balance)
-                balance[1].append(df.index[i]) 
+                balance.append([df.index[i].to_pydatetime(), current_balance])
                 i += 1
             while df.index[i] < close_time and df.index[i] < df.index[-1]:
-                balance[0].append(current_balance+position_size*(df['close'].iloc[i]/open_price-1)*type*leverage)
-                balance[1].append(df.index[i])  
+                balance.append([df.index[i].to_pydatetime(), current_balance+position_size*(df['close'].iloc[i]/open_price-1)*type*leverage])
                 i += 1
             current_balance += pnl
             
         while df.index[i] < df.index[-1]:
-            balance[0].append(current_balance)
-            balance[1].append(df.index[i])  
+            balance.append([df.index[i].to_pydatetime(), current_balance])
             i += 1
+
+        balance = pd.DataFrame(balance, columns=['ts', 'value'])
+
         return balance
 
 
@@ -199,9 +201,10 @@ class StrategyManager(QThread):
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
                     transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, commission)
+                    trade_open = False
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
                     transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, commission) 
-
+                    trade_open = False
             if not trade_open:
                 if df['macd_signal'].iloc[i-1] < df['macd'].iloc[i] and df['macd_signal'].iloc[i] > df['macd'].iloc[i-1]:
                     if position_type == "percent":
@@ -241,8 +244,10 @@ class StrategyManager(QThread):
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
                     transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, commission)
+                    trade_open = False
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
                     transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, commission)
+                    trade_open = False
 
             if not trade_open:
                 if df['macd_signal'].iloc[i-1] < df['macd_signal'].iloc[i-2] and df['macd_signal'].iloc[i] > df['macd_signal'].iloc[i-1]:
@@ -282,9 +287,11 @@ class StrategyManager(QThread):
                 self.progress_changed.emit(int(i / len(df) * 100))
             if trade_open:
                 if df['macd'].iloc[i-1] > df['macd'].iloc[i-2] and df['macd'].iloc[i] < df['macd'].iloc[i-1] and type == 1:
-                    transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, df['close'].iloc[i], df.index[i], type, 0, 0, commission)        
+                    transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, df['close'].iloc[i], df.index[i], type, 0, 0, commission) 
+                    trade_open = False       
                 elif df['macd'].iloc[i-1] < df['macd'].iloc[i-2] and df['macd'].iloc[i] > df['macd'].iloc[i-1] and type == -1:
                     transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, df['close'].iloc[i], df.index[i], type, 0, 0, commission)  
+                    trade_open = False
 
             if not trade_open:
                 if df['macd'].iloc[i-1] < df['macd'].iloc[i-2] and df['macd'].iloc[i] > df['macd'].iloc[i-1]:
@@ -376,7 +383,7 @@ class StrategyManager(QThread):
                     transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, df['bollinger_low'].iloc[i], df.index[i], type, df['bollinger_low'].iloc[i], sl, commission)
                     trade_open = False
                 elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
-                    transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, open_price, sl)
+                    transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, open_price, sl, commission)
                     trade_open = False
 
             else:
@@ -489,13 +496,13 @@ class StrategyManager(QThread):
 
     def triple_supertrend(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
 
-        sti1 = self.Supertrend(df, 12, 3, 1)
+        sti1 = self.Supertrend(df, 12, 3)
         sti2 = self.Supertrend(df, 11, 2, 2)
         sti3 = self.Supertrend(df, 10, 1, 3)
         df = df.join(sti1)
         df = df.join(sti2)
         df = df.join(sti3)
-        indicators = ['Final Lowerband 1', 'Final Upperband 1', 'Final Lowerband 2', 'Final Upperband 2' 'Final Lowerband 3', 'Final Upperband 3']
+        indicators = ['Final Lowerband', 'Final Upperband', 'Final Lowerband 2', 'Final Upperband 2', 'Final Lowerband 3', 'Final Upperband 3']
         
         current_balance = initial_balance
         transactions = []
@@ -537,6 +544,7 @@ class StrategyManager(QThread):
     def supertrend_v3(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
         good_deal = 3.3
         antishtraf = 0.09
+        shtraf = 1
         period = 10
         multiplier = 2
 
@@ -555,7 +563,7 @@ class StrategyManager(QThread):
             if trade_open:
                 if df['low'].iloc[i] < df['Final Lowerband'].iloc[i-1]:
                     close_price = df['Final Lowerband'].iloc[i-1]
-                    transactions, current_balance = self.close(balance, transactions, current_balance, position_size * shtraf, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0, commission)
+                    transactions, current_balance = self.close(transactions, current_balance, position_size * shtraf, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0, commission)
                     trade_open = False
                     if shtraf < 1:
                         shtraf += antishtraf
@@ -563,7 +571,7 @@ class StrategyManager(QThread):
                         shtraf = 0
                 elif df['high'].iloc[i] > df['Final Upperband'].iloc[i-1]:
                     close_price = df['Final Upperband'].iloc[i-1]
-                    transactions, current_balance = self.close(balance, transactions, current_balance, position_size * shtraf, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0, commission)
+                    transactions, current_balance = self.close(transactions, current_balance, position_size * shtraf, leverage, open_price, open_time, close_price, df.index[i], type,  0, 0, commission)
                     trade_open = False
                     if shtraf < 1:
                         shtraf += antishtraf
@@ -613,7 +621,8 @@ class StrategyManager(QThread):
         transactions = []
         percent = int(len(df) / 100)
         trade_open = False
-
+        was_below = 0 
+        
         for i in range(len(df)):
             if i % percent == 0:
                 self.progress_changed.emit(int(i / len(df) * 100))

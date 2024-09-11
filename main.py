@@ -322,12 +322,16 @@ class CryptoTradingApp(QWidget):
             # Строим графики индикаторов
             for column in indicators:
                 if column in df.columns:
-                    self.canvas.ax2.plot(df.index, df[column], label=column, alpha=0.3)
+                    if df[column].iloc[-1] > df['close'].iloc[-1] * 0.7 and df[column].iloc[-1] < df['close'].iloc[-1] * 1.3:
+                        self.canvas.ax1.plot(df.index, df[column], label=column, alpha=0.5)
+                    else:
+                        self.canvas.ax2.plot(df.index, df[column], label=column, alpha=0.5)
                 else:
                     print(f"Индикатор '{column}' отсутствует в DataFrame.")
 
             percent5 = int(len(df) / 20)
             index = 0 
+            label_added = False
             # Рисуем свечи
             candlestick_data = zip(mdates.date2num(df.index.to_pydatetime()), df['open'], df['high'], df['low'], df['close'])
             for date, open, high, low, close in candlestick_data:
@@ -335,10 +339,15 @@ class CryptoTradingApp(QWidget):
                     self.bar.setValue(int(index / len(df) * 100))
                 index += 1
                 color = '#089981' if close >= open else '#F23645'
+                if not label_added:
+                    self.canvas.ax1.plot([date, date], [open, close], color=color, label = str(self.symbol_input.currentText()+' OKX'), linewidth=2)
+                    label_added = True
+                else:
+                    self.canvas.ax1.plot([date, date], [open, close], color=color, linewidth=2)
                 self.canvas.ax1.plot([date, date], [low, high], color=color, linewidth=0.8)
-                self.canvas.ax1.plot([date, date], [open, close], color=color, linewidth=2)
+                
 
-        if len(balance[0]) > 0 and len(transactions) > 0:
+        if len(balance['value']) > 0 and len(transactions) > 0:
             wins = 0
             losses = 0
             winrate = 0
@@ -351,7 +360,7 @@ class CryptoTradingApp(QWidget):
                 winrate = 0
             else:
                 winrate = round(wins/(wins+losses)*100, ndigits=2)
-            profit = round((float(balance[0][-1])-float(balance[0][0]))/float(balance[0][0])*100, ndigits=2)
+            profit = round((float(balance['value'].iloc[-1])-float(balance['value'].iloc[0]))/float(balance['value'].iloc[0])*100, ndigits=2)
 
 
             if len(df) <= 10000:
@@ -398,77 +407,99 @@ class CryptoTradingApp(QWidget):
             self.bar.setValue(40)
             
             # Квадратики на фоне баланса
-            max_profit = 0.0
+            max_rise = 0.0
             patch_count = 30
-            step = int((len(balance[0])-1)/patch_count)
-            for i in range (0, len(balance[0])-1-step, step):
-                if abs((balance[0][i+step] - balance[0][i]) / balance[0][i]) > max_profit:
-                    max_profit = abs((balance[0][i+step] - balance[0][i]) / balance[0][i])
+            step = int((len(balance)-1)/patch_count)
+            for i in range (0, len(balance)-1-step, step):
+                rise = abs((balance['value'].iloc[i+step] - balance['value'].iloc[i]) / balance['value'].iloc[i])
+                if rise > max_rise:
+                    max_rise = rise
 
-            for i in range (0, len(balance[0])-1-step, step):
-                patch_color = '#089981' if (balance[0][i+step] - balance[0][i]) > 0 else '#F23645'
+            for i in range (0, len(balance)-1-step, step):
+                patch_color = '#089981' if (balance['value'].iloc[i+step] - balance['value'].iloc[i]) > 0 else '#F23645'
                 self.canvas.ax3.add_patch(plt.Rectangle(
-                            (balance[1][i], min(balance[0])),
-                            (balance[1][-1] - balance[1][0])/patch_count*0.96,
-                            abs((balance[0][i+step] - balance[0][i]) / balance[0][i])/max_profit*(max(balance[0])-min(balance[0])),
+                            (balance['ts'].iloc[i], min(balance['value'])),
+                            (balance['ts'].iloc[-1] - balance['ts'].iloc[0])/patch_count*0.98,
+                            abs((balance['value'].iloc[i+step] - balance['value'].iloc[i]) / balance['value'].iloc[i])/max_rise*(max(balance['value'])-min(balance['value'])),
                             color=patch_color, alpha=0.2
                         )) 
 
             # Рисуем баланс
-            index = 0 
-            if max(balance[0]) / min(balance[0]) < 4:
-                self.canvas.ax3.plot(balance[1], balance[0], label='Balance', color='#089981', linestyle='-')
+
+            # Логика выше и ниже начального баланса
+            above_initial = balance['value'] >= self.initial_balance
+
+            # Рисуем всю линию графика, а затем изменяем цвет участков
+            if max(balance['value']) / min(balance['value']) < 4:
+                self.canvas.ax3.plot(balance['ts'], balance['value'], color='black', alpha=0)
             else:
-                self.canvas.ax3.semilogy(balance[1], balance[0], label='Balance', color='#089981', linestyle='-')
-            NbData = len(balance[1])
-            MaxBL = [[MaxBL] * NbData for MaxBL in range(int(max(balance[0])+1))]
-            Max = [np.asarray(MaxBL[x]) for x in range(int(max(balance[0])+1))]
-            step = int((max(balance[0])-min(balance[0]))/20)
+                self.canvas.ax3.semilogy(balance['ts'], balance['value'], color='black', alpha=0)
+
+            start_idx = 0
+
+            while start_idx < len(balance):
+                # Ищем конец участка, где значение выше или ниже начального баланса
+                end_idx = start_idx + 1
+                while end_idx < len(balance) and above_initial[end_idx] == above_initial[start_idx]:
+                    end_idx += 1
+
+                # Выбираем цвет в зависимости от того, выше или ниже начального баланса
+                color = '#089981' if above_initial[start_idx] else '#F23645'
+
+                # Рисуем участок линии
+                self.canvas.ax3.plot(balance['ts'][start_idx:end_idx + 1], 
+                                    balance['value'][start_idx:end_idx + 1], 
+                                    color=color)
+
+                # Переход к следующему участку
+                start_idx = end_idx
+
+            NbData = len(balance['ts'])
+            MaxBL = [[MaxBL] * NbData for MaxBL in range(int(max(balance['value'])+1))]
+            Max = [np.asarray(MaxBL[x]) for x in range(int(max(balance['value'])+1))]
+            step = int((max(balance['value'])-min(balance['value']))/20)
             
             self.bar.setValue(60)
             try:
                 if step == 0:
                     step = 1
-                for x in range (int(balance[0][0]), int(max(balance[0])), step):
-                    self.canvas.ax3.fill_between(balance[1], Max[x], balance[0], where=balance[0] >= Max[x], facecolor='#089981', alpha=0.05)
-                for x in range (int(min(balance[0])), int(balance[0][0]), step):
-                    self.canvas.ax3.fill_between(balance[1], balance[0], Max[x], where=balance[0] <= Max[x], facecolor='#FF5045', alpha=0.05)
+                for x in range (int(balance['value'].iloc[0]), int(max(balance['value'])), step):
+                    self.canvas.ax3.fill_between(balance['ts'], Max[x], balance['value'], where=balance['value'] >= Max[x], facecolor='#089981', alpha=0.05)
+                for x in range (int(min(balance['value'])), int(balance['value'].iloc[0]), step):
+                    self.canvas.ax3.fill_between(balance['ts'], balance['value'], Max[x], where=balance['value'] <= Max[x], facecolor='#FF5045', alpha=0.05)
             except:
                 print('че-то не так')    
 
+            # Рассчет максимальной просадки 
             max_drawdown = 0
             max_balance = 0
             self.bar.setValue(80)
-            for i in range(0, len(balance[0])):
-                if max_balance < balance[0][i]:
-                    max_balance = balance[0][i]
-                if (max_balance - balance[0][i]) * 100 / max_balance > max_drawdown:
-                    max_drawdown = (max_balance - balance[0][i]) * 100 / max_balance
-
-
-            for label in self.canvas.ax3.get_yticklabels(which='both'):
-                label.set_color(textcolor)
-
+            for i in range(0, len(balance['value'])):
+                if max_balance < balance['value'].iloc[i]:
+                    max_balance = balance['value'].iloc[i]
+                if (max_balance - balance['value'].iloc[i]) * 100 / max_balance > max_drawdown:
+                    max_drawdown = (max_balance - balance['value'].iloc[i]) * 100 / max_balance
 
             # Статистика
             self.text = []
-            period = balance[1][-1] - balance[1][0]
+            period = balance['ts'].iloc[-1] - balance['ts'].iloc[0]
             period_days = f"{period.days} days"
             self.text.append(str(winrate)+'%') 
             self.text.append(str(profit)+'%')
             self.text.append(str(wins+losses))
             self.text.append(period_days)
-            self.text.append(str(balance[0][0])+' USDT')
-            self.text.append(str(round(balance[0][-1], ndigits=1))+' USDT')
+            self.text.append(str(balance['value'].iloc[0])+' USDT')
+            self.text.append(str(round(balance['value'].iloc[-1], ndigits=1))+' USDT')
             self.text.append(str(round(max_drawdown, ndigits=1))+'%')
             self.text.append('CheetosTrading')
 
             self.plot_statistics()
 
         # Легенды
-        self.canvas.ax1.legend([str(self.symbol_input.currentText()+' OKX')], loc='upper left', edgecolor='white') 
-        self.canvas.ax2.legend(loc='upper right', edgecolor='white')
-        self.canvas.ax3.legend(loc='upper left', edgecolor='white')
+        
+        self.canvas.ax1.legend(loc='upper left')
+        self.canvas.ax2.legend(loc='upper right')
+        self.canvas.ax3.legend(loc='upper left')
 
         # Переустановка форматтера оси X для ax1
         locator = mdates.AutoDateLocator()
