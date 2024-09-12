@@ -10,7 +10,7 @@ import tensorflow as tf  # type: ignore
 from tensorflow.keras.models import Sequential  # type: ignore
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input # type: ignore
 import matplotlib.dates as mdates # type: ignore
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt # type: ignore
 from tensorflow.keras.losses import MeanSquaredError # type: ignore
 from sklearn.model_selection import train_test_split # type: ignore
 from tensorflow.keras.callbacks import EarlyStopping # type: ignore

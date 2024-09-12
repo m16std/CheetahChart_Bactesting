@@ -1,4 +1,4 @@
-import matplotlib
+import matplotlib # type: ignore
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt # type: ignore
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # type: ignore

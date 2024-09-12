@@ -2,7 +2,7 @@ from PyQt5.QtGui import *  # type: ignore
 import pandas as pd # type: ignore
 import numpy as np # type: ignore
 import ta # type: ignore
-from PyQt5.QtCore import Qt, QSettings, QThread, pyqtSignal # type: ignore
+from PyQt5.QtCore import QThread, pyqtSignal # type: ignore
 
 class StrategyManager(QThread):
     # Сигнал завершения расчета
