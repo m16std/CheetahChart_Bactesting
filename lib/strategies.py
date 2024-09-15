@@ -537,7 +537,9 @@ class StrategyManager(QThread):
         multiplier = 1
 
         sti = self.Supertrend(df, period, multiplier)
-        df = df.join(sti)
+        df['Final Lowerband'] = sti['Final Lowerband']
+        df['Final Upperband'] = sti['Final Upperband']
+        df['Supertrend'] = sti['Supertrend']
         indicators = ['Final Lowerband', 'Final Upperband']
 
         current_balance = initial_balance
@@ -578,9 +580,15 @@ class StrategyManager(QThread):
         sti1 = self.Supertrend(df, 12, 3)
         sti2 = self.Supertrend(df, 11, 2, 2)
         sti3 = self.Supertrend(df, 10, 1, 3)
-        df = df.join(sti1)
-        df = df.join(sti2)
-        df = df.join(sti3)
+        df['Final Lowerband'] = sti1['Final Lowerband']
+        df['Final Upperband'] = sti1['Final Upperband']
+        df['Supertrend'] = sti1['Supertrend']
+        df['Final Lowerband 2'] = sti2['Final Lowerband 2']
+        df['Final Upperband 2'] = sti2['Final Upperband 2']
+        df['Supertrend 2'] = sti2['Supertrend 2']
+        df['Final Lowerband 3'] = sti3['Final Lowerband 3']
+        df['Final Upperband 3'] = sti3['Final Upperband 3']
+        df['Supertrend 3'] = sti3['Supertrend 3']
         indicators = ['Final Lowerband', 'Final Upperband', 'Final Lowerband 2', 'Final Upperband 2', 'Final Lowerband 3', 'Final Upperband 3']
         
         current_balance = initial_balance
@@ -628,7 +636,9 @@ class StrategyManager(QThread):
         multiplier = 2
 
         sti = self.Supertrend(df, period, multiplier)
-        df = df.join(sti)
+        df['Final Lowerband'] = sti['Final Lowerband']
+        df['Final Upperband'] = sti['Final Upperband']
+        df['Supertrend'] = sti['Supertrend']
         indicators = ['Final Lowerband', 'Final Upperband']
 
         current_balance = initial_balance

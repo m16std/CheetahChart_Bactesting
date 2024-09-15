@@ -11,6 +11,7 @@ import matplotlib.image as mpimg # type: ignore
 import qdarktheme # type: ignore
 import numpy as np # type: ignore
 import pickle
+import math
 
 from lib.file_manager import FileManager 
 from lib.neural_network import AIManager
@@ -544,7 +545,11 @@ class CryptoTradingApp(QWidget):
     def plot_indicators(self, df, indicators):
         for column in indicators:
             if column in df.columns:
-                if df[column].iloc[-1] > df['close'].iloc[-1] * 0.7 and df[column].iloc[-1] < df['close'].iloc[-1] * 1.3:
+                i = len(df) - 1
+                while i > 0 and math.isnan(df[column].iloc[i]):
+                    i -= 1
+                # проверка на то нужно ли рисовать индикатор на одном графике с ценой
+                if df[column].iloc[i] > df['close'].iloc[i] * 0.7 and df[column].iloc[i] < df['close'].iloc[i] * 1.3: 
                     self.canvas.ax1.plot(df.index, df[column], label=column, alpha=0.5)
                 else:
                     self.canvas.ax2.plot(df.index, df[column], label=column, alpha=0.5)
