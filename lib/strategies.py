@@ -1,14 +1,21 @@
+import inspect
 from PyQt5.QtGui import *  # type: ignore
 import pandas as pd # type: ignore
 import numpy as np # type: ignore
 import ta # type: ignore
 from PyQt5.QtCore import QThread, pyqtSignal # type: ignore
+import pickle
+from PyQt5.QtWidgets import QFileDialog
+import textwrap
+
 
 class StrategyManager(QThread):
     # Сигнал завершения расчета
     calculation_complete = pyqtSignal(object, object, object)
     # Сигнал обновления прогресс-бара
     progress_changed = pyqtSignal(int)
+
+    export_complete = pyqtSignal()
 
     def __init__(self, parent=None):
         super(StrategyManager, self).__init__(parent)
@@ -24,35 +31,49 @@ class StrategyManager(QThread):
         self.strat_name = strat_name
         self.commission = commission
 
-    def run(self):
+    def run(self, mode="run"):
+        if mode == "run":
+            self.run_strategy()
+        elif mode == "export":
+            self.export_strategy()
+        elif mode == "import":
+            self.import_strategy()
+        else:
+            print("Неверный режим")
 
+    def find(self, strat_name):
         current_strategy = self.macd_strategy
-        if self.strat_name == "MACD":
+        if strat_name == "MACD":
             current_strategy = self.macd_strategy
-        elif self.strat_name == "MACD v2":
+        elif strat_name == "MACD v2":
             current_strategy = self.macd_v2_strategy
-        elif self.strat_name == "Bollinger + VWAP":
+        elif strat_name == "Bollinger + VWAP":
             current_strategy = self.bollinger_vwap_strategy
-        elif self.strat_name == "Bollinger v2":
+        elif strat_name == "Bollinger v2":
             current_strategy = self.bollinger_v2
-        elif self.strat_name == "Supertrend":
+        elif strat_name == "Supertrend":
             current_strategy = self.supertrend_strategy
-        elif self.strat_name == "Triple Supertrend":
+        elif strat_name == "Triple Supertrend":
             current_strategy = self.triple_supertrend
-        elif self.strat_name == "MACD v3":
+        elif strat_name == "MACD v3":
             current_strategy = self.macd_v3_strategy
-        elif self.strat_name == "MACD VWAP":
+        elif strat_name == "MACD VWAP":
             current_strategy = self.macd_vwap_strategy
-        elif self.strat_name == "Hawkes Process":
+        elif strat_name == "Hawkes Process":
             current_strategy = self.hawkes_process_strategy
-        elif self.strat_name == "Supertrend v3 SOLANA 1H SETUP":
+        elif strat_name == "Supertrend v3 SOLANA 1H SETUP":
             current_strategy = self.supertrend_v3
-        elif self.strat_name == "DCA":
+        elif strat_name == "DCA":
             current_strategy = self.dca_strategy
-        elif self.strat_name == "RSI":
+        elif strat_name == "RSI":
             current_strategy = self.rsi_strategy
-        elif self.strat_name == "MA-50 cross MA-200":
+        elif strat_name == "MA-50 cross MA-200":
             current_strategy = self.ma50200_cross_strategy
+
+        return current_strategy
+
+    def run_strategy(self):
+        current_strategy = self.find(self.strat_name)
 
         if self.position_type == "percent":
             self.position_size = self.position_size / 100 * self.initial_balance
@@ -60,9 +81,68 @@ class StrategyManager(QThread):
             self.position_size = self.position_size
 
         transactions, balance, indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
-
-        # После завершения сигнализируем об этом
         self.calculation_complete.emit(transactions, balance, indicators)
+
+
+    def export_strategy(self):
+        current_strategy = self.find(self.strat_name)
+        file_path, _ = QFileDialog.getSaveFileName(None, "Save Strategy as Text", "", "Python Files (*.py);;All Files (*)")
+
+        if file_path:
+            strategy_code = inspect.getsource(current_strategy)
+            dedented_code = textwrap.dedent(strategy_code)
+            # Сохраняем текст стратегии
+            with open(file_path, 'w') as file:
+                file.write(dedented_code)
+            print(f"Strategy saved to {file_path}")
+        else:
+            print("Saving cancelled")
+
+    def load_strategy(self, file_path):
+        with open(file_path, 'r') as file:
+            strategy_code = file.read()
+        # Компилируем код стратегии
+        compiled_code = compile(strategy_code, filename=file_path, mode='exec')
+        # Локальное пространство имен для выполнения кода
+        local_namespace = {}
+        # Выполняем код стратегии в локальном пространстве имен
+        exec(compiled_code, globals(), local_namespace)
+
+        return local_namespace
+
+
+
+    def import_strategy(self):
+        """Импортирует стратегию из файла и запускает её"""
+        file_path, _ = QFileDialog.getOpenFileName(None, "Open Strategy", "", "Python Files (*.py);;All Files (*)")
+        if file_path:
+            strategy_namespace = self.load_strategy(file_path)
+            # Ищем первую функцию в загруженном коде
+            strategy_function = self.get_first_function(strategy_namespace)
+            if strategy_function:
+                self.strategy = strategy_function
+                self.run_strategy()  # Запускаем импортированную стратегию
+            else:
+                print("Функция стратегии не найдена в файле")
+        else:
+            print("Открытие отменено")
+
+    def load_strategy(self, file_path):
+        """Загружает стратегию из .py файла"""
+        strategy_namespace = {}
+        with open(file_path, 'r') as file:
+            strategy_code = file.read()
+            compiled_code = compile(strategy_code, filename=file_path, mode='exec')
+            exec(compiled_code, strategy_namespace)
+        return strategy_namespace
+
+    def get_first_function(self, namespace):
+        """Возвращает первую функцию из загруженного пространства имён"""
+        for name, obj in namespace.items():
+            if callable(obj):  # Ищем первую функцию
+                return obj
+        return None
+
 
 
     def close(self, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, close_time, type, tp, sl, commission):
@@ -183,6 +263,7 @@ class StrategyManager(QThread):
         return balance
 
 
+
     def macd_strategy(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
         # Получаем индикаторы
         macd = ta.trend.MACD(df['close'])
@@ -196,8 +277,6 @@ class StrategyManager(QThread):
         trade_open = False
 
         for i in range(len(df)):
-            if i % percent == 0:
-                self.progress_changed.emit(int(i / len(df) * 100))
             if trade_open:
                 if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
                     transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, commission)

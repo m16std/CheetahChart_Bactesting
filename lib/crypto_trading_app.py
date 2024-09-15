@@ -124,8 +124,9 @@ class CryptoTradingApp(QWidget):
 
         button_layout.addWidget(self.create_vertical_separator())
 
-        self.rai_button = QPushButton('Open strategy', self)
+        self.rai_button = QPushButton('Import strategy', self)
         self.rai_button.setStyleSheet(style)
+        self.rai_button.clicked.connect(self.import_strategy)
         button_layout.addWidget(self.rai_button)
 
         button_layout.addWidget(self.create_vertical_separator())
@@ -148,11 +149,16 @@ class CryptoTradingApp(QWidget):
         return button_layout
 
     
-    def export_strategy(self, strategy_function, filename):
-        with open(filename, 'wb') as file:
-            pickle.dump(strategy_function, file) 
+    def export_strategy(self):
+        self.thread = StrategyManager(self.strat_input.currentText(), self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
+        self.thread.run(mode="export") 
   
-
+    def import_strategy(self):
+        if self.file_handler.load_candlesticks():
+            self.thread = StrategyManager(self.strat_input.currentText(), self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
+            self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
+            self.thread.calculation_complete.connect(self.on_calculation_complete)
+            self.thread.run(mode="import") 
 
     def get_inputs_layout(self):
         font_size = 10 

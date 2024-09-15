@@ -1,0 +1,43 @@
+import ta # type: ignore
+
+def macd_strategy(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
+    # Получаем индикаторы
+    macd = ta.trend.MACD(df['close'])
+    df['macd'] = macd.macd()
+    df['macd_signal'] = macd.macd_signal()
+    indicators = ['macd', 'macd_signal']
+
+    current_balance = initial_balance
+    transactions = []
+    percent = int(len(df) / 100)
+    trade_open = False
+
+    for i in range(len(df)):
+        if trade_open:
+            if (df['high'].iloc[i] >= tp and type == 1) or (df['low'].iloc[i] <= tp and type == -1):
+                transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, tp, df.index[i], type, tp, sl, commission)
+                trade_open = False
+            elif (df['low'].iloc[i] <= sl and type == 1) or (df['high'].iloc[i] >= sl and type == -1):
+                transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, sl, df.index[i], type, tp, sl, commission) 
+                trade_open = False
+        if not trade_open:
+            if df['macd_signal'].iloc[i-1] < df['macd'].iloc[i] and df['macd_signal'].iloc[i] > df['macd'].iloc[i-1]:
+                if position_type == "percent":
+                    position_size = position_size / 100 * current_balance
+                open_price = df['close'].iloc[i]
+                open_time = df.index[i]
+                type = 1
+                tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
+                trade_open = True
+            if df['macd_signal'].iloc[i-1] > df['macd'].iloc[i] and df['macd_signal'].iloc[i] < df['macd'].iloc[i-1]:
+                if position_type == "percent":
+                    position_size = position_size / 100 * current_balance
+                open_price = df['close'].iloc[i]
+                open_time = df.index[i]
+                type = -1
+                tp, sl = self.get_tp_sl(df, i, open_price, profit_factor, type, 15)
+                trade_open = True
+
+    balance = self.calculate_balance(df, transactions, initial_balance, leverage)
+    return transactions, balance, indicators
+
