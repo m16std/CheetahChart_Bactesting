@@ -74,12 +74,6 @@ class StrategyManager(QThread):
 
     def run_strategy(self):
         current_strategy = self.find(self.strat_name)
-
-        if self.position_type == "percent":
-            self.position_size = self.position_size / 100 * self.initial_balance
-        else:
-            self.position_size = self.position_size
-
         transactions, balance, indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
         self.calculation_complete.emit(transactions, balance, indicators)
 
@@ -98,17 +92,7 @@ class StrategyManager(QThread):
         else:
             print("Saving cancelled")
 
-    def load_strategy(self, file_path):
-        with open(file_path, 'r') as file:
-            strategy_code = file.read()
-        # Компилируем код стратегии
-        compiled_code = compile(strategy_code, filename=file_path, mode='exec')
-        # Локальное пространство имен для выполнения кода
-        local_namespace = {}
-        # Выполняем код стратегии в локальном пространстве имен
-        exec(compiled_code, globals(), local_namespace)
 
-        return local_namespace
 
 
 
@@ -121,7 +105,9 @@ class StrategyManager(QThread):
             strategy_function = self.get_first_function(strategy_namespace)
             if strategy_function:
                 self.strategy = strategy_function
-                self.run_strategy()  # Запускаем импортированную стратегию
+                # Запускаем импортированную стратегию
+                transactions, balance, indicators = self.strategy(self, self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
+                self.calculation_complete.emit(transactions, balance, indicators)
             else:
                 print("Функция стратегии не найдена в файле")
         else:
@@ -847,7 +833,9 @@ class StrategyManager(QThread):
     def rsi_strategy(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
 
         df['rsi'] = ta.momentum.RSIIndicator(df['close'], window=14).rsi()
-        indicators = ['rsi']
+        df['70'] = 70
+        df['30'] = 30
+        indicators = ['rsi','70', '30']
         
         current_balance = initial_balance
         transactions = []

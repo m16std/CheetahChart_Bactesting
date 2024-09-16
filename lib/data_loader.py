@@ -8,6 +8,7 @@ class DataDownloadThread(QThread):
     # Сигнал завершения скачивания
     data_downloaded_save_it = pyqtSignal(object)
     data_downloaded_run_it = pyqtSignal(object)
+    request_exception = pyqtSignal()
     # Сигнал обновления прогресс-бара
     progress_changed = pyqtSignal(int)
 
@@ -26,10 +27,13 @@ class DataDownloadThread(QThread):
         data = self.get_okx_ohlcv(self.symbol, self.interval, self.limit)
 
         # После завершения сигнализируем об этом
-        if self.run_or_save:
-            self.data_downloaded_run_it.emit(data)
+        if len(data) == 0:
+            self.request_exception.emit()
         else:
-            self.data_downloaded_save_it.emit(data)
+            if self.run_or_save:
+                self.data_downloaded_run_it.emit(data)
+            else:
+                self.data_downloaded_save_it.emit(data)
 
         
     def get_okx_ohlcv(self, symbol, interval, limit):
@@ -40,26 +44,26 @@ class DataDownloadThread(QThread):
             'limit': 300
         }
         data = []
-        response = requests.get(url, params=params)
-        response = response.json()['data']
-        data.extend(response)
-        url = f'https://www.okx.com/api/v5/market/history-candles'
-        while len(data) < limit:
-            self.progress_changed.emit(round(len(data) / limit*100)) 
-            params = {
-                'instId': symbol,
-                'bar': interval,
-                'limit': 100,
-                'after': data[-1][0]
-            }
+        try:
             response = requests.get(url, params=params)
-            try:
+            response = response.json()['data']
+            data.extend(response)
+            url = f'https://www.okx.com/api/v5/market/history-candles'
+            while len(data) < limit:
+                self.progress_changed.emit(round(len(data) / limit*100)) 
+                params = {
+                    'instId': symbol,
+                    'bar': interval,
+                    'limit': 100,
+                    'after': data[-1][0]
+                }
+                response = requests.get(url, params=params)
                 response = response.json()['data']
                 data.extend(response)
-            except requests.exceptions.RequestException as err:
-                print(f"Error: {err}")
-                break
-
+        except requests.exceptions.RequestException as err:
+            print(f"Error: {err}")
+            return []
+        
         self.progress_changed.emit(100) 
         data = data[::-1]
 
