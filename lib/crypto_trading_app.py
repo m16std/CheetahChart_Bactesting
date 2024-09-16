@@ -26,6 +26,7 @@ class CryptoTradingApp(QWidget):
     def __init__(self):
         super().__init__()
         self.file_handler = FileManager(self)
+        self.strategy_manager = StrategyManager()
         self.ai_manager = AIManager(self)
         self.initUI()       
       
@@ -151,12 +152,22 @@ class CryptoTradingApp(QWidget):
 
     
     def export_strategy(self):
-        self.thread = StrategyManager(self.strat_input.currentText(), self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
-        self.thread.run(mode="export") 
+        self.thread = StrategyManager()
+        self.thread.run('', [], 0, 0, 0, 0, 0, 0, mode="export") 
   
     def import_strategy(self):
         if self.file_handler.load_candlesticks():
-            self.thread = StrategyManager(self.strat_input.currentText(), self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
+            self.thread = StrategyManager()
+
+            self.thread.profit_factor = self.profit_factor
+            self.thread.leverage = self.leverage
+            self.thread.initial_balance = self.initial_balance
+            self.thread.position_type = self.position_type
+            self.thread.position_size = self.position_size
+            self.thread.df = self.df
+            self.thread.strat_name = self.strat_input.currentText()
+            self.thread.commission = self.commission
+        
             self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
             self.thread.calculation_complete.connect(self.on_calculation_complete)
             self.thread.run(mode="import") 
@@ -193,7 +204,8 @@ class CryptoTradingApp(QWidget):
         self.bar.setAlignment(Qt.AlignCenter) 
 
         self.strat_input = QComboBox(self)
-        self.strat_input.addItems(['MA-50 cross MA-200', 'RSI', 'DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Triple Supertrend','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
+        self.strat_input.addItems(self.strategy_manager.strategy_dict.keys())
+        #self.strat_input.addItems(['MA-50 cross MA-200', 'RSI', 'DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Triple Supertrend','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
 
         font = self.strat_input.font()
         font.setPointSize(font_size)
@@ -227,7 +239,7 @@ class CryptoTradingApp(QWidget):
         self.profit_factor = float(self.settings.value("profit_factor", "1.5"))
         self.position_type = self.settings.value("position_type", "percent")
         self.position_size = float(self.settings.value("position_size", "100"))
-        print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, , Размер позиции: {self.position_size}, Тип: {self.position_type}")
+        print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, Размер позиции: {self.position_size}, Тип: {self.position_type}")
     
     def create_vertical_separator(self):
         # Создаем QFrame для вертикального разделителя
@@ -314,16 +326,25 @@ class CryptoTradingApp(QWidget):
         self.thread.start()
 
     def run_strategy(self):
+        self.thread = StrategyManager()
+
+        self.thread.profit_factor = self.profit_factor
+        self.thread.leverage = self.leverage
+        self.thread.initial_balance = self.initial_balance
+        self.thread.position_type = self.position_type
+        self.thread.position_size = self.position_size
+        self.thread.df = self.df
+        self.thread.strat_name = self.strat_input.currentText()
+        self.thread.commission = self.commission
+
+        self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
+        self.thread.calculation_complete.connect(self.on_calculation_complete)
+        self.thread.run() 
+    
+    def on_calculation_complete(self, transactions, balance, indicators):
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
         self.canvas.ax3.clear()
-
-        self.thread = StrategyManager(self.strat_input.currentText(), self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
-        self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
-        self.thread.calculation_complete.connect(self.on_calculation_complete)
-        self.thread.start() 
-    
-    def on_calculation_complete(self, transactions, balance, indicators):
         # Метод, который будет вызван после выполнения стратегии
         self.plot(self.df, transactions, balance, indicators)
 
@@ -394,9 +415,9 @@ class CryptoTradingApp(QWidget):
 
         # Рисуем всю линию графика, а затем изменяем цвет участков
         if max(balance['value']) / min(balance['value']) < 4:
-            self.canvas.ax3.plot(balance['ts'], balance['value'], color='black', alpha=0)
+            self.canvas.ax3.plot(balance['ts'], balance['value'], color='black', label = 'balance', alpha=0)
         else:
-            self.canvas.ax3.semilogy(balance['ts'], balance['value'], color='black', alpha=0)
+            self.canvas.ax3.semilogy(balance['ts'], balance['value'], color='black', label = 'balance', alpha=0)
 
         start_idx = 0
 

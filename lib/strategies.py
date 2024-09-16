@@ -20,18 +20,35 @@ class StrategyManager(QThread):
     def __init__(self, parent=None):
         super(StrategyManager, self).__init__(parent)
  
-    def __init__(self, strat_name, df, initial_balance, position_size, position_type, profit_factor, leverage, commission, parent=None):
+    def __init__(self, parent=None):
         super(StrategyManager, self).__init__(parent)
-        self.profit_factor = float(profit_factor)
-        self.leverage = leverage
-        self.initial_balance = initial_balance
-        self.position_type = position_type
-        self.position_size = position_size
-        self.df = df
-        self.strat_name = strat_name
-        self.commission = commission
+        self.profit_factor = 0
+        self.leverage = 0
+        self.initial_balance = 0
+        self.position_type = ''
+        self.position_size = 0
+        self.df = []
+        self.strat_name = 0
+        self.commission = 0
+    
+        self.strategy_dict = {
+            'MACD Strategy': self.macd_strategy,
+            'MACD v2': self.macd_v2_strategy,
+            'Bollinger + VWAP': self.bollinger_vwap_strategy,
+            'Bollinger v2': self.bollinger_v2,
+            'Triple Supertrend': self.triple_supertrend,
+            'MACD v3': self.macd_v3_strategy,
+            'MACD VWAP': self.macd_vwap_strategy,
+            'Hawkes Process': self.hawkes_process_strategy,
+            'Supertrend v3 SOLANA 1H SETUP': self.supertrend_v3,
+            'DCA': self.dca_strategy,
+            'RSI': self.rsi_strategy,
+            'MA-50 cross MA-200': self.ma50200_cross_strategy,
+            # другие предустановленные стратегии
+        }
 
     def run(self, mode="run"):
+        
         if mode == "run":
             self.run_strategy()
         elif mode == "export":
@@ -41,39 +58,9 @@ class StrategyManager(QThread):
         else:
             print("Неверный режим")
 
-    def find(self, strat_name):
-        current_strategy = self.macd_strategy
-        if strat_name == "MACD":
-            current_strategy = self.macd_strategy
-        elif strat_name == "MACD v2":
-            current_strategy = self.macd_v2_strategy
-        elif strat_name == "Bollinger + VWAP":
-            current_strategy = self.bollinger_vwap_strategy
-        elif strat_name == "Bollinger v2":
-            current_strategy = self.bollinger_v2
-        elif strat_name == "Supertrend":
-            current_strategy = self.supertrend_strategy
-        elif strat_name == "Triple Supertrend":
-            current_strategy = self.triple_supertrend
-        elif strat_name == "MACD v3":
-            current_strategy = self.macd_v3_strategy
-        elif strat_name == "MACD VWAP":
-            current_strategy = self.macd_vwap_strategy
-        elif strat_name == "Hawkes Process":
-            current_strategy = self.hawkes_process_strategy
-        elif strat_name == "Supertrend v3 SOLANA 1H SETUP":
-            current_strategy = self.supertrend_v3
-        elif strat_name == "DCA":
-            current_strategy = self.dca_strategy
-        elif strat_name == "RSI":
-            current_strategy = self.rsi_strategy
-        elif strat_name == "MA-50 cross MA-200":
-            current_strategy = self.ma50200_cross_strategy
-
-        return current_strategy
 
     def run_strategy(self):
-        current_strategy = self.find(self.strat_name)
+        current_strategy = self.strategy_dict.get(self.strat_name)
         transactions, balance, indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
         self.calculation_complete.emit(transactions, balance, indicators)
 
@@ -100,13 +87,10 @@ class StrategyManager(QThread):
         """Импортирует стратегию из файла и запускает её"""
         file_path, _ = QFileDialog.getOpenFileName(None, "Open Strategy", "", "Python Files (*.py);;All Files (*)")
         if file_path:
-            strategy_namespace = self.load_strategy(file_path)
-            # Ищем первую функцию в загруженном коде
-            strategy_function = self.get_first_function(strategy_namespace)
+            strategy_function = self.load_strategy(file_path)
             if strategy_function:
-                self.strategy = strategy_function
                 # Запускаем импортированную стратегию
-                transactions, balance, indicators = self.strategy(self, self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
+                transactions, balance, indicators = strategy_function(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
                 self.calculation_complete.emit(transactions, balance, indicators)
             else:
                 print("Функция стратегии не найдена в файле")
@@ -114,13 +98,30 @@ class StrategyManager(QThread):
             print("Открытие отменено")
 
     def load_strategy(self, file_path):
-        """Загружает стратегию из .py файла"""
+        """Загружает стратегию из .py файла и добавляет её в список доступных стратегий"""
         strategy_namespace = {}
+
+        global_vars = {
+            'ta': ta  # Добавляем глобальные библиотеки, если нужно
+        }
+
         with open(file_path, 'r') as file:
             strategy_code = file.read()
             compiled_code = compile(strategy_code, filename=file_path, mode='exec')
-            exec(compiled_code, strategy_namespace)
-        return strategy_namespace
+
+            # Выполняем код стратегии с глобальными переменными
+            exec(compiled_code, global_vars, strategy_namespace)
+
+        # Извлекаем функцию стратегии из пространства имен
+        for name, func in strategy_namespace.items():
+            if callable(func):
+                # Оборачиваем функцию стратегии в метод класса, чтобы она получила доступ к self
+                strategy_method = func.__get__(self, self.__class__)
+                setattr(self, name, strategy_method)
+                print(f"Strategy '{name}' successfully loaded and added to available strategies")
+                break
+        print(strategy_namespace)
+        return strategy_method
 
     def get_first_function(self, namespace):
         """Возвращает первую функцию из загруженного пространства имён"""
@@ -211,8 +212,6 @@ class StrategyManager(QThread):
             else:
                 final_lowerband.iloc[i] = np.nan
 
-        print(f'Final Lowerband {additional_index}' == 'Final Lowerband 0')
-
         if additional_index == 0:
             return pd.DataFrame({
                 'Supertrend': supertrend,
@@ -247,7 +246,6 @@ class StrategyManager(QThread):
         balance = pd.DataFrame(balance, columns=['ts', 'value'])
 
         return balance
-
 
 
     def macd_strategy(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
