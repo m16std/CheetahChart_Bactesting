@@ -1,5 +1,5 @@
 import ta
-def rsi_strategy(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
+def rsi_strategy_imp(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
 
     df['rsi'] = ta.momentum.RSIIndicator(df['close'], window=14).rsi()
     indicators = ['rsi']

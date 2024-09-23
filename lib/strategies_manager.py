@@ -4,9 +4,10 @@ import pandas as pd # type: ignore
 import numpy as np # type: ignore
 import ta # type: ignore
 from PyQt5.QtCore import QThread, pyqtSignal # type: ignore
-import pickle
-from PyQt5.QtWidgets import QFileDialog
+from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 import textwrap
+import importlib.util
+import os
 
 
 class StrategyManager(QThread):
@@ -14,14 +15,13 @@ class StrategyManager(QThread):
     calculation_complete = pyqtSignal(object, object, object)
     # Сигнал обновления прогресс-бара
     progress_changed = pyqtSignal(int)
-
-    export_complete = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super(StrategyManager, self).__init__(parent)
+    # Сигнал завершения импорта
+    import_complete = pyqtSignal(object, object)
+        
  
     def __init__(self, parent=None):
         super(StrategyManager, self).__init__(parent)
+        self.strategy_directory = "strategies/"
         self.profit_factor = 0
         self.leverage = 0
         self.initial_balance = 0
@@ -36,6 +36,7 @@ class StrategyManager(QThread):
             'MACD v2': self.macd_v2_strategy,
             'Bollinger + VWAP': self.bollinger_vwap_strategy,
             'Bollinger v2': self.bollinger_v2,
+            'Supertrend': self.supertrend_strategy,
             'Triple Supertrend': self.triple_supertrend,
             'MACD v3': self.macd_v3_strategy,
             'MACD VWAP': self.macd_vwap_strategy,
@@ -44,8 +45,10 @@ class StrategyManager(QThread):
             'DCA': self.dca_strategy,
             'RSI': self.rsi_strategy,
             'MA-50 cross MA-200': self.ma50200_cross_strategy,
-            # другие предустановленные стратегии
         }
+
+        self.load_strategies_from_directory()
+
 
     def run(self, mode="run"):
         
@@ -58,15 +61,49 @@ class StrategyManager(QThread):
         else:
             print("Неверный режим")
 
+    def load_strategies_from_directory(self):
+        # Проверяем наличие директории стратегий
+        if not os.path.exists(self.strategy_directory):
+            QMessageBox.warning(self, 'Error', 'Директория со внешними стратегиями не найдена')
+            return
+        
+        # Получаем список файлов с расширением .py в директории стратегий
+        strategy_files = [f for f in os.listdir(self.strategy_directory) if f.endswith(".py")]
+
+        for file in strategy_files:
+            file_path = os.path.join(self.strategy_directory, file)
+            module_name = os.path.splitext(file)[0]
+
+            try:
+                # Импортируем стратегию с помощью importlib
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                strategy_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(strategy_module)
+
+                # Ищем функцию в модуле
+                strategy_function = None
+                for name in dir(strategy_module):
+                    obj = getattr(strategy_module, name)
+                    if callable(obj):
+                        strategy_function = obj
+                        break
+
+                if strategy_function:
+                    strategy_function = strategy_function.__get__(self, self.__class__)
+                    self.strategy_dict[module_name] = strategy_function
+
+            except Exception as e:
+                print(f'Error loading strategy "{module_name}": {str(e)}')
 
     def run_strategy(self):
         current_strategy = self.strategy_dict.get(self.strat_name)
+        
         transactions, balance, indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
         self.calculation_complete.emit(transactions, balance, indicators)
 
-
     def export_strategy(self):
         current_strategy = self.find(self.strat_name)
+        
         file_path, _ = QFileDialog.getSaveFileName(None, "Save Strategy as Text", "", "Python Files (*.py);;All Files (*)")
 
         if file_path:
@@ -80,48 +117,117 @@ class StrategyManager(QThread):
             print("Saving cancelled")
 
 
-
-
-
-    def import_strategy(self):
-        """Импортирует стратегию из файла и запускает её"""
+    """
+def import_strategy(self):
         file_path, _ = QFileDialog.getOpenFileName(None, "Open Strategy", "", "Python Files (*.py);;All Files (*)")
         if file_path:
-            strategy_function = self.load_strategy(file_path)
-            if strategy_function:
-                # Запускаем импортированную стратегию
-                transactions, balance, indicators = strategy_function(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
-                self.calculation_complete.emit(transactions, balance, indicators)
-            else:
-                print("Функция стратегии не найдена в файле")
+            # Открываем диалоговое окно для ввода имени новой стратегии
+            strategy_name, ok = QInputDialog.getText(None, 'Strategy Name', 'Введите название стратегии:')
+            
+            if ok:
+                # Проверяем, что имя стратегии уникально
+                if strategy_name in self.strategy_dict:
+                    QMessageBox.warning(None, 'Error', f'Стратегия "{strategy_name}" уже существует. Введите другое имя.')
+                    return
+
+                # Импортируем стратегию
+                try:
+                    strategy_namespace = self.load_strategy(file_path)
+                
+                    # Извлекаем функцию стратегии из пространства имен
+                    for name, func in strategy_namespace.items():
+                        if callable(func):
+                            # Оборачиваем функцию стратегии в метод класса, чтобы она получила доступ к self
+                            strategy_method = func.__get__(self, self.__class__)
+                            setattr(self, name, strategy_method)
+                            print(f"Strategy '{name}' successfully loaded and added to available strategies")
+                            break
+
+                    
+                    
+                    strategy_function = None
+                    for name, obj in strategy_namespace.items():
+                        if callable(obj):
+                            strategy_function = obj.__get__(self, self.__class__)
+                            setattr(self, name, strategy_function)
+                            break
+                        
+                    if not strategy_function:
+                        raise Exception('No valid strategy function found in the imported file.')
+                    
+                    #transactions, balance, indicators = strategy_function(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
+                    #self.calculation_complete.emit(transactions, balance, indicators)
+
+                    # Обновляем выпадающий список в главном окне
+                    self.import_complete.emit(strategy_name, strategy_function)
+                    
+                    
+                except Exception as e:
+                    QMessageBox.critical(None, 'Error', f'Не удалось импортировать стратегию: {str(e)}')
         else:
-            print("Открытие отменено")
+            print("Import cancelled.")
+"""
+    
+
+    def import_strategy(self):
+        # Открываем диалоговое окно для выбора файла стратегии
+        file_path, _ = QFileDialog.getOpenFileName(None, "Import Strategy", "", "Python Files (*.py);;All Files (*)")
+        
+        if file_path:
+            # Открываем диалоговое окно для ввода имени новой стратегии
+            strategy_name, ok = QInputDialog.getText(None, 'Strategy Name', 'Enter a name for the imported strategy:')
+            
+            if ok:
+                # Проверяем, что имя стратегии уникально
+                if strategy_name in self.strategy_dict:
+                    QMessageBox.warning(None, 'Error', f'Strategy "{strategy_name}" already exists. Choose another name.')
+                    return
+
+                # Импортируем стратегию с помощью importlib
+                try:
+                    module_name = os.path.splitext(os.path.basename(file_path))[0]  # Название модуля из имени файла
+                    spec = importlib.util.spec_from_file_location(module_name, file_path)
+                    strategy_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(strategy_module)
+
+                    # Ищем функцию в модуле
+                    strategy_function = None
+                    for name in dir(strategy_module):
+                        obj = getattr(strategy_module, name)
+                        if callable(obj):
+                            strategy_function = obj
+                            break
+
+                    strategy_function = strategy_function.__get__(self, self.__class__)
+
+                    if strategy_function is None:
+                        raise Exception('No valid strategy function found in the imported file.')
+
+                    # Сохраняем функцию как обычную
+                    self.strategy_dict[strategy_name] = strategy_function
+
+                    print(type(strategy_function))
+                    print(type(self.strategy_dict['RSI']))
+
+                    # Обновляем выпадающий список в главном окне
+                    self.import_complete.emit(strategy_name, strategy_function)
+
+                except Exception as e:
+                    QMessageBox.critical(None, 'Error', f'Failed to import strategy: {str(e)}')
+        else:
+            print("Import cancelled.")
 
     def load_strategy(self, file_path):
         """Загружает стратегию из .py файла и добавляет её в список доступных стратегий"""
         strategy_namespace = {}
 
-        global_vars = {
-            'ta': ta  # Добавляем глобальные библиотеки, если нужно
-        }
-
         with open(file_path, 'r') as file:
             strategy_code = file.read()
             compiled_code = compile(strategy_code, filename=file_path, mode='exec')
+            exec(compiled_code, strategy_namespace)
 
-            # Выполняем код стратегии с глобальными переменными
-            exec(compiled_code, global_vars, strategy_namespace)
 
-        # Извлекаем функцию стратегии из пространства имен
-        for name, func in strategy_namespace.items():
-            if callable(func):
-                # Оборачиваем функцию стратегии в метод класса, чтобы она получила доступ к self
-                strategy_method = func.__get__(self, self.__class__)
-                setattr(self, name, strategy_method)
-                print(f"Strategy '{name}' successfully loaded and added to available strategies")
-                break
-        print(strategy_namespace)
-        return strategy_method
+        return strategy_namespace
 
     def get_first_function(self, namespace):
         """Возвращает первую функцию из загруженного пространства имён"""

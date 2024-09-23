@@ -1,4 +1,4 @@
-def supertrend_strategy(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
+def supertrend_strategy_imp(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
     period = 10
     multiplier = 1
 

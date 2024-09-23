@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog # type: ignore
+from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QMessageBox # type: ignore
 from PyQt5.QtGui import *  # type: ignore
 from PyQt5.QtCore import Qt, QSettings # type: ignore
 import pandas as pd # type: ignore
@@ -10,12 +10,11 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox # type: ignore
 import matplotlib.image as mpimg # type: ignore
 import qdarktheme # type: ignore
 import numpy as np # type: ignore
-import pickle
 import math
 
 from lib.file_manager import FileManager 
 from lib.neural_network import AIManager
-from lib.strategies import StrategyManager
+from lib.strategies_manager import StrategyManager
 from lib.settings_window import SettingsDialog
 from lib.data_loader import DataDownloadThread
 from lib.mpl_canvas import MPlCanvas
@@ -30,6 +29,8 @@ class CryptoTradingApp(QWidget):
         self.ai_manager = AIManager(self)
         self.initUI()       
       
+# Инициализация окна
+
     def initUI(self):
         self.df = []
         self.setWindowTitle('Cheetos Trading')
@@ -150,28 +151,6 @@ class CryptoTradingApp(QWidget):
 
         return button_layout
 
-    
-    def export_strategy(self):
-        self.thread = StrategyManager()
-        self.thread.run('', [], 0, 0, 0, 0, 0, 0, mode="export") 
-  
-    def import_strategy(self):
-        if self.file_handler.load_candlesticks():
-            self.thread = StrategyManager()
-
-            self.thread.profit_factor = self.profit_factor
-            self.thread.leverage = self.leverage
-            self.thread.initial_balance = self.initial_balance
-            self.thread.position_type = self.position_type
-            self.thread.position_size = self.position_size
-            self.thread.df = self.df
-            self.thread.strat_name = self.strat_input.currentText()
-            self.thread.commission = self.commission
-        
-            self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
-            self.thread.calculation_complete.connect(self.on_calculation_complete)
-            self.thread.run(mode="import") 
-
     def get_inputs_layout(self):
         font_size = 10 
 
@@ -205,8 +184,6 @@ class CryptoTradingApp(QWidget):
 
         self.strat_input = QComboBox(self)
         self.strat_input.addItems(self.strategy_manager.strategy_dict.keys())
-        #self.strat_input.addItems(['MA-50 cross MA-200', 'RSI', 'DCA', 'Supertrend v3 SOLANA 1H SETUP', 'Hawkes Process', 'Supertrend', 'Triple Supertrend','Bollinger + VWAP', 'Bollinger v2', 'MACD', 'MACD v2', 'MACD v3', 'MACD VWAP'])
-
         font = self.strat_input.font()
         font.setPointSize(font_size)
         self.strat_input.setFont(font)
@@ -225,6 +202,46 @@ class CryptoTradingApp(QWidget):
         inputs_layout.addWidget(self.bar)
 
         return inputs_layout
+    
+    def create_vertical_separator(self):
+        # Создаем QFrame для вертикального разделителя
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)  # Вертикальная линия
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("color: gray; background-color: gray;")
+        separator.setFixedWidth(2)  # Устанавливаем фиксированную ширину линии
+
+        return separator
+
+# Импорт-экспорт стратегий
+
+    def export_strategy(self):
+        self.thread = StrategyManager()
+        self.thread.run('', [], 0, 0, 0, 0, 0, 0, mode="export") 
+  
+    def import_strategy(self):
+    
+        self.thread = StrategyManager()
+
+        self.thread.profit_factor = self.profit_factor
+        self.thread.leverage = self.leverage
+        self.thread.initial_balance = self.initial_balance
+        self.thread.position_type = self.position_type
+        self.thread.position_size = self.position_size
+        self.thread.df = self.df
+        self.thread.strat_name = self.strat_input.currentText()
+        self.thread.commission = self.commission
+    
+        self.thread.import_complete.connect(self.add_strategy)
+        self.thread.run(mode="import") 
+
+    def add_strategy(self, strategy_name, strategy_function):
+        # Добавление новой стратегии в словарь и обновление выпадающего списка
+        self.strat_input.addItem(strategy_name)
+        self.strategy_manager.strategy_dict[strategy_name] = strategy_function
+        print(f'Strategy "{strategy_name}" imported successfully.')
+
+# Настройки
 
     def open_settings_dialog(self):
         dialog = SettingsDialog(self.settings, self)
@@ -241,15 +258,7 @@ class CryptoTradingApp(QWidget):
         self.position_size = float(self.settings.value("position_size", "100"))
         print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, Размер позиции: {self.position_size}, Тип: {self.position_type}")
     
-    def create_vertical_separator(self):
-        # Создаем QFrame для вертикального разделителя
-        separator = QFrame()
-        separator.setFrameShape(QFrame.VLine)  # Вертикальная линия
-        separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("color: gray; background-color: gray;")
-        separator.setFixedWidth(2)  # Устанавливаем фиксированную ширину линии
-
-        return separator
+# Тема приложения
 
     def apply_theme(self):
         if self.current_theme == "dark":
@@ -283,6 +292,8 @@ class CryptoTradingApp(QWidget):
     def load_theme(self):
         return self.settings.value("theme")
     
+# Запуск стратегий
+
     def open_and_run(self):
         if self.file_handler.load_candlesticks():
             self.run_strategy()
@@ -326,7 +337,8 @@ class CryptoTradingApp(QWidget):
         self.thread.start()
 
     def run_strategy(self):
-        self.thread = StrategyManager()
+
+        self.thread = self.strategy_manager
 
         self.thread.profit_factor = self.profit_factor
         self.thread.leverage = self.leverage
@@ -348,6 +360,8 @@ class CryptoTradingApp(QWidget):
         # Метод, который будет вызван после выполнения стратегии
         self.plot(self.df, transactions, balance, indicators)
 
+# Отрисовка графиков
+
     def plot(self, df, transactions, balance, indicators):
 
         if len(df) <= 5000 and len(df) > 0:
@@ -367,7 +381,7 @@ class CryptoTradingApp(QWidget):
             self.plot_statistics()
 
 
-        self.prichesatt_canvas()
+        self.formatter_canvas()
         self.bar.setValue(100)
         self.canvas.draw()
         self.show()
@@ -448,9 +462,9 @@ class CryptoTradingApp(QWidget):
             for x in range (int(min(balance['value'])), int(balance['value'].iloc[0]), step):
                 self.canvas.ax3.fill_between(balance['ts'], balance['value'], Max[x], where=balance['value'] <= Max[x], facecolor='#FF5045', alpha=0.05)
         except:
-            print('че-то не так')   
+            print('Ошибка в процессе создания градиента баланса')   
 
-                # Квадратики на фоне баланса
+        # Квадратики на фоне баланса
         max_rise = 0.0
         patch_count = 30
         step = int((len(balance)-1)/patch_count)
@@ -577,7 +591,7 @@ class CryptoTradingApp(QWidget):
             else:
                 print(f"Индикатор '{column}' отсутствует в DataFrame.")
 
-    def prichesatt_canvas(self):
+    def formatter_canvas(self):
         # Легенды
         self.canvas.ax1.legend(loc='upper left')
         self.canvas.ax2.legend(loc='upper right')
