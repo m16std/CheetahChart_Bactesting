@@ -1,9 +1,9 @@
 import inspect
-from PyQt5.QtGui import *  # type: ignore
-import pandas as pd # type: ignore
-import numpy as np # type: ignore
-import ta # type: ignore
-from PyQt5.QtCore import QThread, pyqtSignal # type: ignore
+from PyQt5.QtGui import *
+import pandas as pd
+import numpy as np
+import ta
+from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 import textwrap
 import importlib.util
@@ -11,7 +11,7 @@ import os
 
 
 class StrategyManager(QThread):
-    # Сигнал завершения расчета
+    # Сигнал завершения расчета стратегии
     calculation_complete = pyqtSignal(object, object, object)
     # Сигнал обновления прогресс-бара
     progress_changed = pyqtSignal(int)
@@ -21,14 +21,14 @@ class StrategyManager(QThread):
  
     def __init__(self, parent=None):
         super(StrategyManager, self).__init__(parent)
-        self.strategy_directory = "strategies/"
+        self.strategy_directory = ''
         self.profit_factor = 0
         self.leverage = 0
         self.initial_balance = 0
         self.position_type = ''
         self.position_size = 0
         self.df = []
-        self.strat_name = 0
+        self.strat_name = ''
         self.commission = 0
     
         self.strategy_dict = {
@@ -47,8 +47,10 @@ class StrategyManager(QThread):
             'MA-50 cross MA-200': self.ma50200_cross_strategy,
         }
 
-        self.load_strategies_from_directory()
-
+        self.positions = []  # Список сделок
+        self.balance = []  # Хронология баланса
+        self.posId_counter = 1  # Для генерации уникальных ID сделок
+        self.current_balance = 0
 
     def run(self, mode="run"):
         
@@ -60,6 +62,169 @@ class StrategyManager(QThread):
             self.import_strategy()
         else:
             print("Неверный режим")
+
+    def run_strategy(self):
+        current_strategy = self.strategy_dict.get(self.strat_name)
+        self.current_balance = self.initial_balance      
+        indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
+        self.balance = self.calculate_balance(self.df, self.positions, self.initial_balance, self.leverage)
+        self.calculation_complete.emit(self.positions, self.balance, indicators)
+
+# Приспособы для работы стратегий
+
+    def open_position(self, posSide, ordType, tpTriggerPx, slTriggerPx, openPrice, qty, timestamp, leverage=1):
+        """
+        Открывает позицию и возвращает posId.
+        
+        :posSide: 'long' или 'short'
+        :ordType: Тип ордера ('limit' или 'market')
+        :tpTriggerPx: Цена тейкпрофита
+        :slTriggerPx: Цена стоп-лосса
+        :price: Цена открытия позиции
+        :qty: Количество (объем позиции)
+        :timestamp: Время открытия позиции
+        :leverage: Кредитное плечо
+        :return: posId — уникальный ID позиции
+        """
+        # Генерация уникального ID сделки
+        posId = self.posId_counter
+        self.posId_counter += 1
+        
+        # Сохранение сделки в список сделок
+        position = {
+            'posId': posId,
+            'posSide': posSide,
+            'ordType': ordType,
+            'tpTriggerPx': tpTriggerPx,
+            'slTriggerPx': slTriggerPx,
+            'openPrice': openPrice,
+            'qty': qty,
+            'openTimestamp': timestamp,
+            'leverage': leverage,
+            'status': 'open',
+            'closePrice': openPrice,
+            'closeTimestamp': timestamp,
+            'pnl': 0
+        }
+        self.positions.append(position)
+
+        # Возврат posId для дальнейшей работы с позицией
+        return posId
+
+    def check_tp_sl(self, posId, tpTriggerPx, slTriggerPx, timestamp):
+        """
+        Проверяет свечи после открытия позиции на достижение стоп-лосса или тейк-профита.
+        
+        :posId: ID позиции
+        :tpTriggerPx: Цена тейкпрофита
+        :slTriggerPx: Цена стоп-лосса
+        :timestamp: Время
+        """
+        position = next((t for t in self.positions if t['posId'] == posId), None)
+        if position is None:
+            raise ValueError(f"Position with ID {posId} not found")
+
+        # Найдем индекс свечи, соответствующей open_timestamp
+        df_reset = self.df.reset_index()
+        start_index = df_reset[df_reset['ts'] >= timestamp].index[0]
+
+        candle = df_reset.iloc[start_index]
+        high = candle['high']
+        low = candle['low']
+        timestamp = candle['ts']
+
+        # Проверка достижения тейкпрофита и стоплосса для long и short позиций
+        if position['posSide'] == 'long':
+            # Для long позиции тейкпрофит и стоплосс
+            if tpTriggerPx and high >= tpTriggerPx:
+                self.close_position(posId, tpTriggerPx, timestamp)
+                return 'executed_tp'
+            elif slTriggerPx and low <= slTriggerPx:
+                self.close_position(posId, slTriggerPx, timestamp)
+                return 'executed_sl'
+                
+        elif position['posSide'] == 'short':
+            # Для short позиции тейкпрофит и стоплосс
+            if tpTriggerPx and low <= tpTriggerPx:
+                self.close_position(posId, tpTriggerPx, timestamp)
+                return 'executed_tp'
+            elif slTriggerPx and high >= slTriggerPx:
+                self.close_position(posId, slTriggerPx, timestamp)
+                return 'executed_sl'
+            
+        return False
+                
+    def close_position(self, posId, price, timestamp, ordType='market'):
+        """
+        Закрывает позицию по ID и обновляет баланс.
+
+        :posId: ID позиции
+        :price: Цена закрытия
+        :timestamp: Время закрытия позиции
+        :ordType: Тип ордера ('limit' или 'market')
+        """
+        # Поиск сделки по posId
+        position = next((t for t in self.positions if t['posId'] == posId), None)
+        if position is None:
+            raise ValueError(f"Position with ID {posId} not found")
+        
+        if position['posSide'] == 'long':
+            pnl = position['qty'] * (price - position['openPrice']) / position['openPrice'] * position['leverage'] 
+        else:
+            pnl = position['qty'] * (position['openPrice'] - price) / position['openPrice'] * position['leverage'] 
+
+        pnl -= position['qty'] * self.commission * position['leverage'] # Вычет комиссии
+
+        position['status'] = 'closed'
+        position['closePrice'] = price
+        position['closeTimestamp'] = timestamp
+        position['pnl'] = pnl
+
+        self.current_balance += pnl 
+
+    def get_current_balance(self):
+        return self.current_balance
+
+    def calculate_balance(self, df, positions, initial_balance, leverage):
+        current_balance = initial_balance
+        balance = []
+        i = 0
+        position = next((t for t in self.positions if t['posId'] == i), None)
+
+        for position in positions:
+            while df.index[i] <= position['openTimestamp'] and df.index[i] < df.index[-1]:
+                balance.append([df.index[i].to_pydatetime(), current_balance])
+                i += 1
+            while df.index[i] < position['closeTimestamp'] and df.index[i] < df.index[-1]:
+                if position['posSide'] == 'long':
+                    balance.append([df.index[i].to_pydatetime(), current_balance + position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                else:
+                    balance.append([df.index[i].to_pydatetime(), current_balance - position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                i += 1
+            current_balance += position['pnl']
+            
+        while df.index[i] < df.index[-1]:
+            balance.append([df.index[i].to_pydatetime(), current_balance])
+            i += 1
+
+        balance = pd.DataFrame(balance, columns=['ts', 'value'])
+
+        return balance
+
+    def get_tp_sl(self, df, i, open_price, profit_factor, order_type, lookback):
+        if order_type == 'long':
+            sl = 1000000
+            for j in range (lookback):
+                if sl > df['low'].iloc[i-j]:
+                    sl = df['low'].iloc[i-j]
+            tp = (open_price - sl) * profit_factor + open_price
+        if order_type == 'short':
+            sl = 0
+            for j in range (lookback):
+                if sl < df['high'].iloc[i-j]:
+                    sl = df['high'].iloc[i-j]
+            tp = open_price - (sl - open_price) * profit_factor
+        return tp, sl
 
     def load_strategies_from_directory(self):
         # Проверяем наличие директории стратегий
@@ -91,15 +256,10 @@ class StrategyManager(QThread):
                 if strategy_function:
                     strategy_function = strategy_function.__get__(self, self.__class__)
                     self.strategy_dict[module_name] = strategy_function
+                    print(f"Стратегия '{name}' загружена из внешней папки")
 
             except Exception as e:
-                print(f'Error loading strategy "{module_name}": {str(e)}')
-
-    def run_strategy(self):
-        current_strategy = self.strategy_dict.get(self.strat_name)
-        
-        transactions, balance, indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
-        self.calculation_complete.emit(transactions, balance, indicators)
+                print(f'Ошибка загрузки стратегии "{module_name}": {str(e)}')
 
     def export_strategy(self):
         current_strategy = self.find(self.strat_name)
@@ -114,60 +274,7 @@ class StrategyManager(QThread):
                 file.write(dedented_code)
             print(f"Strategy saved to {file_path}")
         else:
-            print("Saving cancelled")
-
-
-    """
-def import_strategy(self):
-        file_path, _ = QFileDialog.getOpenFileName(None, "Open Strategy", "", "Python Files (*.py);;All Files (*)")
-        if file_path:
-            # Открываем диалоговое окно для ввода имени новой стратегии
-            strategy_name, ok = QInputDialog.getText(None, 'Strategy Name', 'Введите название стратегии:')
-            
-            if ok:
-                # Проверяем, что имя стратегии уникально
-                if strategy_name in self.strategy_dict:
-                    QMessageBox.warning(None, 'Error', f'Стратегия "{strategy_name}" уже существует. Введите другое имя.')
-                    return
-
-                # Импортируем стратегию
-                try:
-                    strategy_namespace = self.load_strategy(file_path)
-                
-                    # Извлекаем функцию стратегии из пространства имен
-                    for name, func in strategy_namespace.items():
-                        if callable(func):
-                            # Оборачиваем функцию стратегии в метод класса, чтобы она получила доступ к self
-                            strategy_method = func.__get__(self, self.__class__)
-                            setattr(self, name, strategy_method)
-                            print(f"Strategy '{name}' successfully loaded and added to available strategies")
-                            break
-
-                    
-                    
-                    strategy_function = None
-                    for name, obj in strategy_namespace.items():
-                        if callable(obj):
-                            strategy_function = obj.__get__(self, self.__class__)
-                            setattr(self, name, strategy_function)
-                            break
-                        
-                    if not strategy_function:
-                        raise Exception('No valid strategy function found in the imported file.')
-                    
-                    #transactions, balance, indicators = strategy_function(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
-                    #self.calculation_complete.emit(transactions, balance, indicators)
-
-                    # Обновляем выпадающий список в главном окне
-                    self.import_complete.emit(strategy_name, strategy_function)
-                    
-                    
-                except Exception as e:
-                    QMessageBox.critical(None, 'Error', f'Не удалось импортировать стратегию: {str(e)}')
-        else:
-            print("Import cancelled.")
-"""
-    
+            print("Saving cancelled")    
 
     def import_strategy(self):
         # Открываем диалоговое окно для выбора файла стратегии
@@ -236,43 +343,7 @@ def import_strategy(self):
                 return obj
         return None
 
-
-
-    def close(self, transactions, current_balance, position_size, leverage, open_price, open_time, close_price, close_time, type, tp, sl, commission):
-
-        if (close_price > open_price and type == 1) or (close_price < open_price and type == -1):
-            result = 1
-        else:
-            result = 0
-
-        if tp == sl == 0:  #режим когда тейкпрофита и стоплосса не было, а вместо этого сделка закрылась по значению какого-то индикатора
-            if result == 1:
-                tp = close_price
-                sl = open_price
-            else:
-                tp = open_price
-                sl = close_price
-
-        pnl = position_size * (close_price-open_price)/open_price * leverage * type - position_size * commission * leverage
-        transactions.append((tp, sl, position_size, open_price, open_time, close_time, close_price, type, result, pnl))
-        current_balance += pnl            
-
-        return transactions, current_balance
-    
-    def get_tp_sl(self, df, i, open_price, profit_factor, order_type, lookback):
-        if order_type == 1:
-            sl = 1000000
-            for j in range (lookback):
-                if sl > df['low'].iloc[i-j]:
-                    sl = df['low'].iloc[i-j]
-            tp = (open_price - sl) * profit_factor + open_price
-        if order_type == -1:
-            sl = 0
-            for j in range (lookback):
-                if sl < df['high'].iloc[i-j]:
-                    sl = df['high'].iloc[i-j]
-            tp = open_price - (sl - open_price) * profit_factor
-        return tp, sl
+# Расчет супертренда для стратегий с супертрендом  
 
     def Supertrend(self, df, atr_period, multiplier, additional_index = 0):
         high = df['high']
@@ -331,28 +402,7 @@ def import_strategy(self):
                 f'Final Upperband {additional_index}': final_upperband
             }, index=df.index)
 
-    def calculate_balance(self, df, transactions, initial_balance, leverage):
-        current_balance = initial_balance
-        balance = []
-        i = 0
-
-        for tp, sl, position_size, open_price, open_time, close_time, close_price, type, result, pnl in transactions:
-            while df.index[i] <= open_time and df.index[i] < df.index[-1]:
-                balance.append([df.index[i].to_pydatetime(), current_balance])
-                i += 1
-            while df.index[i] < close_time and df.index[i] < df.index[-1]:
-                balance.append([df.index[i].to_pydatetime(), current_balance+position_size*(df['close'].iloc[i]/open_price-1)*type*leverage])
-                i += 1
-            current_balance += pnl
-            
-        while df.index[i] < df.index[-1]:
-            balance.append([df.index[i].to_pydatetime(), current_balance])
-            i += 1
-
-        balance = pd.DataFrame(balance, columns=['ts', 'value'])
-
-        return balance
-
+# Встроенные стратегии
 
     def macd_strategy(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
         # Получаем индикаторы

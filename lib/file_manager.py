@@ -1,7 +1,8 @@
-from PyQt5.QtWidgets import QFileDialog  # type: ignore
+from PyQt5.QtWidgets import QWidget, QFileDialog, QMessageBox  # type: ignore
 from PyQt5.QtGui import *  # type: ignore
 import pandas as pd # type: ignore   
 import joblib  # type: ignore 
+import os
 
 class FileManager:
     def __init__(self, app):
@@ -39,3 +40,39 @@ class FileManager:
             self.app.model = joblib.load(file_name)
             return True
         return False
+    
+    
+    def check_strategy_directory(self):
+        # Проверяем, существует ли папка стратегий, если нет — открываем диалоговое окно
+        strategy_directory = self.load_saved_directory()
+
+        if not strategy_directory or not os.path.exists(strategy_directory):
+            QMessageBox.warning(self.app, 'Предупреждение', 'Папка внешних стратегий не найдена. Укажите папку')
+            strategy_directory = self.open_directory_selection_dialog()
+            return strategy_directory
+        else:
+            return strategy_directory
+
+    def open_directory_selection_dialog(self):
+        # Открываем диалог для выбора директории
+        directory = QFileDialog.getExistingDirectory(self.app, 'Выбрать папку внешних стратегий')
+
+        if directory:
+            self.save_strategy_directory(directory)
+            return directory
+        else:
+            QMessageBox.warning(self.app, 'Предупреждение', 'Папка не выбрана.')
+            return None
+
+    def load_saved_directory(self):
+        # Загружаем сохранённую директорию (можно использовать QSettings или просто файл)
+        try:
+            with open('strategy_directory.txt', 'r') as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            return None
+
+    def save_strategy_directory(self, directory):
+        # Сохраняем директорию в файл
+        with open('strategy_directory.txt', 'w') as f:
+            f.write(directory)

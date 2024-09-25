@@ -1,15 +1,15 @@
 import sys
-from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QMessageBox # type: ignore
-from PyQt5.QtGui import *  # type: ignore
-from PyQt5.QtCore import Qt, QSettings # type: ignore
-import pandas as pd # type: ignore
-import matplotlib.pyplot as plt # type: ignore
-import matplotlib.dates as mdates # type: ignore
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar # type: ignore
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox # type: ignore
-import matplotlib.image as mpimg # type: ignore
-import qdarktheme # type: ignore
-import numpy as np # type: ignore
+from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QMessageBox
+from PyQt5.QtGui import * 
+from PyQt5.QtCore import Qt, QSettings
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import matplotlib.image as mpimg
+import qdarktheme
+import numpy as np
 import math
 
 from lib.file_manager import FileManager 
@@ -28,6 +28,7 @@ class CryptoTradingApp(QWidget):
         self.strategy_manager = StrategyManager()
         self.ai_manager = AIManager(self)
         self.initUI()       
+        self.load_external_strategies()
       
 # Инициализация окна
 
@@ -120,8 +121,8 @@ class CryptoTradingApp(QWidget):
 
         button_layout.addWidget(self.create_vertical_separator())
 
-        self.rai_button = QPushButton('Export strategy', self)
-        self.rai_button.clicked.connect(self.export_strategy)
+        self.rai_button = QPushButton('Update external strats', self)
+        self.rai_button.clicked.connect(self.load_external_strategies)
         self.rai_button.setStyleSheet(style)
         button_layout.addWidget(self.rai_button)
 
@@ -240,6 +241,14 @@ class CryptoTradingApp(QWidget):
         self.strat_input.addItem(strategy_name)
         self.strategy_manager.strategy_dict[strategy_name] = strategy_function
         print(f'Strategy "{strategy_name}" imported successfully.')
+
+    def load_external_strategies(self):
+        strategy_directory = self.file_handler.check_strategy_directory()
+        if strategy_directory != None:
+            self.strategy_manager.strategy_directory = strategy_directory
+            self.strategy_manager.load_strategies_from_directory()
+            self.strat_input.clear()
+            self.strat_input.addItems(self.strategy_manager.strategy_dict.keys())
 
 # Настройки
 
@@ -362,7 +371,7 @@ class CryptoTradingApp(QWidget):
 
 # Отрисовка графиков
 
-    def plot(self, df, transactions, balance, indicators):
+    def plot(self, df, positions, balance, indicators):
 
         if len(df) <= 5000 and len(df) > 0:
             # Рисуем индикаторы
@@ -370,13 +379,13 @@ class CryptoTradingApp(QWidget):
             # Рисуем свечи            
             self.plot_candles(df)
             # Рисуем сделки
-            self.plot_trades(transactions)
+            self.plot_trades(positions)
 
-        if len(transactions) > 0:
+        if len(positions) > 0:
             # Рисуем баланс
             self.plot_balance(balance)
             # Получаем статистику
-            self.stats = self.get_statistic(balance, transactions)
+            self.stats = self.get_statistic(balance, positions)
             # Рисуем статистику
             self.plot_statistics()
 
@@ -482,7 +491,7 @@ class CryptoTradingApp(QWidget):
                         color=patch_color, alpha=0.2
                     ))  
 
-    def get_statistic(self, balance, transactions):
+    def get_statistic(self, balance, positions):
         # Рассчет максимальной просадки 
         max_drawdown = 0
         max_balance = 0
@@ -496,8 +505,8 @@ class CryptoTradingApp(QWidget):
         wins = 0
         losses = 0
         winrate = 0
-        for tp, sl, position_size, open_price, open_time, close_time, close_price, type, result, pnl in transactions:
-            if result == 1:
+        for position in positions:
+            if position['pnl'] > 0:
                 wins += 1
             else:
                 losses += 1
@@ -520,42 +529,43 @@ class CryptoTradingApp(QWidget):
         
         return stats
 
-    def plot_trades(self, transactions):
-        for tp, sl, position_size, open_price, open_time, close_time, close_price, type, result, pnl in transactions:
-            if type == 1:
-                self.canvas.ax1.plot(mdates.date2num(open_time), open_price, marker='^', color='lime', markersize=7)
-                self.canvas.ax1.plot(mdates.date2num(close_time), close_price, marker='X', color='salmon', markersize=7)
-            if type == -1:
-                self.canvas.ax1.plot(mdates.date2num(open_time), open_price, marker='v', color='salmon', markersize=7)
-                self.canvas.ax1.plot(mdates.date2num(close_time), close_price, marker='X', color='lime', markersize=7)
+    def plot_trades(self, positions):
+        print(positions)
+        for position in positions:
+            if position['posSide'] == 'long':
+                self.canvas.ax1.plot(mdates.date2num(position['openTimestamp']), position['openPrice'], marker='^', color='lime', markersize=7)
+                self.canvas.ax1.plot(mdates.date2num(position['closeTimestamp']), position['closePrice'], marker='X', color='salmon', markersize=7)
+            if position['posSide'] == 'short':
+                self.canvas.ax1.plot(mdates.date2num(position['openTimestamp']), position['openPrice'], marker='v', color='salmon', markersize=7)
+                self.canvas.ax1.plot(mdates.date2num(position['closeTimestamp']), position['closePrice'], marker='X', color='lime', markersize=7)
         self.bar.setValue(25)
 
         # Рисуем области tp и sl 
-        for tp, sl, position_size, open_price, open_time, close_time, close_price, type, result, pnl in transactions:
-            if type == 1:
+        for position in positions:
+            if position['posSide'] == 'long':
                 self.canvas.ax1.add_patch(plt.Rectangle(
-                    (mdates.date2num(open_time), open_price),
-                    mdates.date2num(close_time) - mdates.date2num(open_time),
-                    tp - open_price,
+                    (mdates.date2num(position['openTimestamp']), position['openPrice']),
+                    mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                    position['tpTriggerPx'] - position['openPrice'],
                     color='lightgreen', alpha=0.1
                 ))
                 self.canvas.ax1.add_patch(plt.Rectangle(
-                    (mdates.date2num(open_time), sl),
-                    mdates.date2num(close_time) - mdates.date2num(open_time),
-                    open_price - sl,
+                    (mdates.date2num(position['openTimestamp']), position['slTriggerPx']),
+                    mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                    position['openPrice'] - position['slTriggerPx'],
                     color='salmon', alpha=0.1
                 ))
-            if type == -1:
+            if position['posSide'] == 'short':
                 self.canvas.ax1.add_patch(plt.Rectangle(
-                    (mdates.date2num(open_time), open_price),
-                    mdates.date2num(close_time) - mdates.date2num(open_time),
-                    sl - open_price,
+                    (mdates.date2num(position['openTimestamp']), position['openPrice']),
+                    mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                    position['slTriggerPx'] - position['openPrice'],
                     color='salmon', alpha=0.1
                 ))
                 self.canvas.ax1.add_patch(plt.Rectangle(
-                    (mdates.date2num(open_time), tp),
-                    mdates.date2num(close_time) - mdates.date2num(open_time),
-                    open_price - tp,
+                    (mdates.date2num(position['openTimestamp']), position['tpTriggerPx']),
+                    mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                    position['openPrice'] - position['tpTriggerPx'],
                     color='lightgreen', alpha=0.1
                 ))
 

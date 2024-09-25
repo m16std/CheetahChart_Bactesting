@@ -12,6 +12,7 @@ def supertrend_strategy_imp(self, df, initial_balance, position_size, position_t
     transactions = []
     percent = int(len(df) / 100)
     trade_open = False
+    ordType = 'market'
 
     for i in range(len(df)):
         if i % percent == 0:
@@ -27,16 +28,14 @@ def supertrend_strategy_imp(self, df, initial_balance, position_size, position_t
                     position_size = position_size / 100 * current_balance
                 open_price = df['close'].iloc[i]
                 open_time = df.index[i]
-                type = 1
+                posSide = 'long'
                 trade_open = True
             elif df['Supertrend'].iloc[i-1] > df['Supertrend'].iloc[i]:
                 if position_type == "percent":
                     position_size = position_size / 100 * current_balance
                 open_price = df['close'].iloc[i]
                 open_time = df.index[i]
-                type = -1
+                posSide = 'short'
                 trade_open = True
 
-    balance = self.calculate_balance(df, transactions, initial_balance, leverage)
-
-    return transactions, balance, indicators
+    return indicators
