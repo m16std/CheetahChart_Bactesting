@@ -1,4 +1,4 @@
-def supertrend_strategy_imp(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
+def supertrend_strategy_imp(self, df, initial_balance, position_size, position_type, profit_factor):
     period = 10
     multiplier = 1
 
@@ -8,34 +8,30 @@ def supertrend_strategy_imp(self, df, initial_balance, position_size, position_t
     df['Supertrend'] = sti['Supertrend']
     indicators = ['Final Lowerband', 'Final Upperband']
 
-    current_balance = initial_balance
-    transactions = []
+    current_balance = qty = initial_balance
+    if position_type == "percent":
+        qty = position_size / 100 * current_balance
     percent = int(len(df) / 100)
-    trade_open = False
-    ordType = 'market'
+    position_open = False
 
     for i in range(len(df)):
         if i % percent == 0:
             self.progress_changed.emit(int(i / len(df) * 100))
-        if trade_open:
-            if df['Supertrend'].iloc[i-1] != df['Supertrend'].iloc[i]:
-                transactions, current_balance = self.close(transactions, current_balance, position_size, leverage, open_price, open_time, df['close'].iloc[i], df.index[i], type, 0, 0, commission)
-                trade_open = False
 
-        if not trade_open:
-            if df['Supertrend'].iloc[i-1] < df['Supertrend'].iloc[i]:
+        if position_open:
+            if df['Supertrend'].iloc[i-1] != df['Supertrend'].iloc[i]:
+                self.close_position(posId, df['close'].iloc[i], df.index[i])
+                position_open = False
+                current_balance = self.get_current_balance()
                 if position_type == "percent":
-                    position_size = position_size / 100 * current_balance
-                open_price = df['close'].iloc[i]
-                open_time = df.index[i]
-                posSide = 'long'
-                trade_open = True
-            elif df['Supertrend'].iloc[i-1] > df['Supertrend'].iloc[i]:
-                if position_type == "percent":
-                    position_size = position_size / 100 * current_balance
-                open_price = df['close'].iloc[i]
-                open_time = df.index[i]
-                posSide = 'short'
-                trade_open = True
+                    qty = position_size / 100 * current_balance
+
+        if not position_open:
+            if df['Supertrend'].iloc[i-1] < df['Supertrend'].iloc[i]:              
+                posId = self.open_position('long', 'market', 0, 0, df['close'].iloc[i], qty, df.index[i])
+                position_open = True
+            if df['Supertrend'].iloc[i-1] > df['Supertrend'].iloc[i]:
+                posId = self.open_position('short', 'market', 0, 0, df['close'].iloc[i], qty, df.index[i])
+                position_open = True
 
     return indicators

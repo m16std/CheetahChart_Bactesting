@@ -362,12 +362,11 @@ class CryptoTradingApp(QWidget):
         self.thread.calculation_complete.connect(self.on_calculation_complete)
         self.thread.run() 
     
-    def on_calculation_complete(self, transactions, balance, indicators):
+    def on_calculation_complete(self, positions, balance, indicators):
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
         self.canvas.ax3.clear()
-        # Метод, который будет вызван после выполнения стратегии
-        self.plot(self.df, transactions, balance, indicators)
+        self.plot(self.df, positions, balance, indicators)
 
 # Отрисовка графиков
 
@@ -542,31 +541,41 @@ class CryptoTradingApp(QWidget):
 
         # Рисуем области tp и sl 
         for position in positions:
-            if position['posSide'] == 'long':
+            if position['tpTriggerPx'] > 0 and position['slTriggerPx'] > 0:
+                if position['posSide'] == 'long':
+                    self.canvas.ax1.add_patch(plt.Rectangle(
+                        (mdates.date2num(position['openTimestamp']), position['openPrice']),
+                        mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                        position['tpTriggerPx'] - position['openPrice'],
+                        color='lightgreen', alpha=0.1
+                    ))
+                    self.canvas.ax1.add_patch(plt.Rectangle(
+                        (mdates.date2num(position['openTimestamp']), position['slTriggerPx']),
+                        mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                        position['openPrice'] - position['slTriggerPx'],
+                        color='salmon', alpha=0.1
+                    ))
+                if position['posSide'] == 'short':
+                    self.canvas.ax1.add_patch(plt.Rectangle(
+                        (mdates.date2num(position['openTimestamp']), position['openPrice']),
+                        mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                        position['slTriggerPx'] - position['openPrice'],
+                        color='salmon', alpha=0.1
+                    ))
+                    self.canvas.ax1.add_patch(plt.Rectangle(
+                        (mdates.date2num(position['openTimestamp']), position['tpTriggerPx']),
+                        mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                        position['openPrice'] - position['tpTriggerPx'],
+                        color='lightgreen', alpha=0.1
+                    ))
+            else:
+                color = 'lightgreen' if position['pnl'] >= 0 else 'salmon'
+
                 self.canvas.ax1.add_patch(plt.Rectangle(
                     (mdates.date2num(position['openTimestamp']), position['openPrice']),
                     mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
-                    position['tpTriggerPx'] - position['openPrice'],
-                    color='lightgreen', alpha=0.1
-                ))
-                self.canvas.ax1.add_patch(plt.Rectangle(
-                    (mdates.date2num(position['openTimestamp']), position['slTriggerPx']),
-                    mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
-                    position['openPrice'] - position['slTriggerPx'],
-                    color='salmon', alpha=0.1
-                ))
-            if position['posSide'] == 'short':
-                self.canvas.ax1.add_patch(plt.Rectangle(
-                    (mdates.date2num(position['openTimestamp']), position['openPrice']),
-                    mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
-                    position['slTriggerPx'] - position['openPrice'],
-                    color='salmon', alpha=0.1
-                ))
-                self.canvas.ax1.add_patch(plt.Rectangle(
-                    (mdates.date2num(position['openTimestamp']), position['tpTriggerPx']),
-                    mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
-                    position['openPrice'] - position['tpTriggerPx'],
-                    color='lightgreen', alpha=0.1
+                    position['closePrice'] - position['openPrice'],
+                    color=color, alpha=0.1
                 ))
 
     def plot_candles(self, df):

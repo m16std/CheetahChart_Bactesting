@@ -65,14 +65,17 @@ class StrategyManager(QThread):
 
     def run_strategy(self):
         current_strategy = self.strategy_dict.get(self.strat_name)
-        self.current_balance = self.initial_balance      
-        indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor, self.leverage, self.commission)
+        self.current_balance = self.initial_balance    
+        self.positions = []
+        self.balance = []
+        self.posId_counter = 1
+        indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor)
         self.balance = self.calculate_balance(self.df, self.positions, self.initial_balance, self.leverage)
         self.calculation_complete.emit(self.positions, self.balance, indicators)
 
 # Приспособы для работы стратегий
 
-    def open_position(self, posSide, ordType, tpTriggerPx, slTriggerPx, openPrice, qty, timestamp, leverage=1):
+    def open_position(self, posSide, ordType, tpTriggerPx, slTriggerPx, openPrice, qty, timestamp):
         """
         Открывает позицию и возвращает posId.
         
@@ -100,11 +103,12 @@ class StrategyManager(QThread):
             'openPrice': openPrice,
             'qty': qty,
             'openTimestamp': timestamp,
-            'leverage': leverage,
+            'leverage': self.leverage,
             'status': 'open',
             'closePrice': openPrice,
             'closeTimestamp': timestamp,
-            'pnl': 0
+            'pnl': 0,
+            'commission': 0
         }
         self.positions.append(position)
 
@@ -173,12 +177,14 @@ class StrategyManager(QThread):
         else:
             pnl = position['qty'] * (position['openPrice'] - price) / position['openPrice'] * position['leverage'] 
 
-        pnl -= position['qty'] * self.commission * position['leverage'] # Вычет комиссии
+        commission = position['qty'] * self.commission * position['leverage']
+        pnl -= commission
 
         position['status'] = 'closed'
         position['closePrice'] = price
         position['closeTimestamp'] = timestamp
         position['pnl'] = pnl
+        position['commission'] = commission
 
         self.current_balance += pnl 
 
@@ -189,7 +195,6 @@ class StrategyManager(QThread):
         current_balance = initial_balance
         balance = []
         i = 0
-        position = next((t for t in self.positions if t['posId'] == i), None)
 
         for position in positions:
             while df.index[i] <= position['openTimestamp'] and df.index[i] < df.index[-1]:
