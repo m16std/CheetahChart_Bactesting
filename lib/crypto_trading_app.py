@@ -18,6 +18,7 @@ from lib.strategies_manager import StrategyManager
 from lib.settings_window import SettingsDialog
 from lib.data_loader import DataDownloadThread
 from lib.mpl_canvas import MPlCanvas
+from lib.positions_table import PositionsTable
 
 pd.options.mode.chained_assignment = None
 
@@ -146,6 +147,13 @@ class CryptoTradingApp(QWidget):
         self.settings_button.clicked.connect(self.open_settings_dialog)
         self.settings_button.setStyleSheet(style)
         button_layout.addWidget(self.settings_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
+
+        self.view_positions_button = QPushButton("View Positions")
+        self.view_positions_button.clicked.connect(self.open_positions_table)
+        self.view_positions_button.setStyleSheet(style)
+        button_layout.addWidget(self.view_positions_button)
 
         spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addItem(spacer)
@@ -529,7 +537,6 @@ class CryptoTradingApp(QWidget):
         return stats
 
     def plot_trades(self, positions):
-        print(positions)
         for position in positions:
             if position['posSide'] == 'long':
                 self.canvas.ax1.plot(mdates.date2num(position['openTimestamp']), position['openPrice'], marker='^', color='lime', markersize=7)
@@ -626,5 +633,7 @@ class CryptoTradingApp(QWidget):
         self.canvas.ax1.xaxis.set_major_locator(locator)
         self.canvas.ax1.xaxis.set_major_formatter(formatter)
 
-
+    def open_positions_table(self):
+        positions_table = PositionsTable(self.strategy_manager.positions)
+        positions_table.exec_()
 
