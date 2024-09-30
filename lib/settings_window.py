@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QMessageBox # type: ignore
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QMessageBox, QSpinBox # type: ignore
 
 class SettingsDialog(QDialog):
     def __init__(self, settings, parent=None):
@@ -13,6 +13,12 @@ class SettingsDialog(QDialog):
         self.leverage_input = QLineEdit()
         self.profit_factor_input = QLineEdit()
         self.position_size_input = QLineEdit()
+        #self.refresh_interval_input = QLineEdit()
+        self.refresh_interval_input = QSpinBox(self)
+        self.refresh_interval_input.setMinimum(5)   # Минимум 5 секунд
+        self.refresh_interval_input.setMaximum(900)  # Максимум 15 минут (900 секунд)
+        self.refresh_interval_input.setValue(10)    # Значение по умолчанию 60 секунд (1 минута)
+
 
         # Добавляем выпадающий список для выбора вариации позиции
         self.position_type_combo = QComboBox()
@@ -27,7 +33,7 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(QLabel("Торговая комиссия"))
         layout.addWidget(self.commission_input)
-        layout.addWidget(QLabel("Начальный баланс"))
+        layout.addWidget(QLabel("Начальный баланс (USDT)"))
         layout.addWidget(self.initial_balance_input)
         layout.addWidget(QLabel("Торговое плечо"))
         layout.addWidget(self.leverage_input)
@@ -37,6 +43,8 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.position_type_combo)
         layout.addWidget(self.position_size_label)
         layout.addWidget(self.position_size_input)
+        layout.addWidget(QLabel("Интервал обновления (сек):"))
+        layout.addWidget(self.refresh_interval_input)
 
         save_button = QPushButton("Сохранить")
         save_button.clicked.connect(self.save_settings)
@@ -58,6 +66,7 @@ class SettingsDialog(QDialog):
         self.leverage_input.setText(self.settings.value("leverage", "2"))
         self.profit_factor_input.setText(self.settings.value("profit_factor", "1.5"))
         self.position_size_input.setText(self.settings.value("position_size", "100"))
+        self.refresh_interval_input.setText(self.settings.value("refresh_interval", "10"))
 
         self.position_type = self.settings.value("position_type")
         self.position_size = self.settings.value("position_size")
@@ -73,6 +82,9 @@ class SettingsDialog(QDialog):
         self.settings.setValue("leverage", self.leverage_input.text())
         self.settings.setValue("profit_factor", self.profit_factor_input.text())
         self.settings.setValue("position_size", self.position_size_input.text())
+        self.settings.setValue("refresh_interval", self.refresh_interval_input.text())
+
+
 
         # Если выбран фиксированный размер в долларах, проверяем, что он не превышает начальный баланс
         initial_balance = float(self.initial_balance_input.text())

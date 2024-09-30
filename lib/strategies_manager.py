@@ -1,23 +1,21 @@
-import inspect
-from PyQt5.QtGui import *
-import pandas as pd
-import numpy as np
-import ta
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
-import textwrap
+from PyQt5.QtGui import *
 import importlib.util
+import pandas as pd
+import numpy as np
+import textwrap
+import inspect
+import time
 import os
+import ta
 
 
 class StrategyManager(QThread):
-    # Сигнал завершения расчета стратегии
     calculation_complete = pyqtSignal(object, object, object)
-    # Сигнал обновления прогресс-бара
     progress_changed = pyqtSignal(int)
-    # Сигнал завершения импорта
     import_complete = pyqtSignal(object, object)
-        
+    update_chart_signal = pyqtSignal()
  
     def __init__(self, parent=None):
         super(StrategyManager, self).__init__(parent)
@@ -72,6 +70,7 @@ class StrategyManager(QThread):
         indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor)
         self.balance = self.calculate_balance(self.df, self.positions, self.initial_balance, self.leverage)
         self.calculation_complete.emit(self.positions, self.balance, indicators)
+
 
 # Приспособы для работы стратегий
 

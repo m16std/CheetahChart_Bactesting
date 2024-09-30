@@ -19,6 +19,7 @@ from lib.settings_window import SettingsDialog
 from lib.data_loader import DataDownloadThread
 from lib.mpl_canvas import MPlCanvas
 from lib.positions_table import PositionsTable
+from lib.chart_updater import ChartUpdater
 
 pd.options.mode.chained_assignment = None
 
@@ -28,6 +29,7 @@ class CryptoTradingApp(QWidget):
         self.file_handler = FileManager(self)
         self.strategy_manager = StrategyManager()
         self.ai_manager = AIManager(self)
+        self.chart_updater = ChartUpdater()
         self.initUI()       
         self.load_external_strategies()
       
@@ -94,7 +96,7 @@ class CryptoTradingApp(QWidget):
 
         button_layout.addWidget(self.create_vertical_separator())
         
-        self.load_button = QPushButton('Download candlesticks', self)
+        self.load_button = QPushButton('Download candles', self)
         self.load_button.clicked.connect(self.download_and_save_candlesticks)
         self.load_button.setStyleSheet(style)
         button_layout.addWidget(self.load_button)
@@ -122,14 +124,14 @@ class CryptoTradingApp(QWidget):
 
         button_layout.addWidget(self.create_vertical_separator())
 
-        self.rai_button = QPushButton('Update external strats', self)
+        self.rai_button = QPushButton('Update strats', self)
         self.rai_button.clicked.connect(self.load_external_strategies)
         self.rai_button.setStyleSheet(style)
         button_layout.addWidget(self.rai_button)
 
         button_layout.addWidget(self.create_vertical_separator())
 
-        self.rai_button = QPushButton('Import strategy', self)
+        self.rai_button = QPushButton('Import strat', self)
         self.rai_button.setStyleSheet(style)
         self.rai_button.clicked.connect(self.import_strategy)
         button_layout.addWidget(self.rai_button)
@@ -154,6 +156,20 @@ class CryptoTradingApp(QWidget):
         self.view_positions_button.clicked.connect(self.open_positions_table)
         self.view_positions_button.setStyleSheet(style)
         button_layout.addWidget(self.view_positions_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
+
+        self.start_upd_button = QPushButton('Updating', self)
+        self.start_upd_button.clicked.connect(self.start_chart_updates)
+        self.start_upd_button.setStyleSheet(style)
+        button_layout.addWidget(self.start_upd_button)
+
+        button_layout.addWidget(self.create_vertical_separator())
+
+        self.stop_upd_button = QPushButton('!Updating', self)
+        self.stop_upd_button.clicked.connect(self.stop_chart_updates)
+        self.stop_upd_button.setStyleSheet(style)
+        button_layout.addWidget(self.stop_upd_button)
 
         spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         button_layout.addItem(spacer)
@@ -273,7 +289,8 @@ class CryptoTradingApp(QWidget):
         self.profit_factor = float(self.settings.value("profit_factor", "1.5"))
         self.position_type = self.settings.value("position_type", "percent")
         self.position_size = float(self.settings.value("position_size", "100"))
-        print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, Размер позиции: {self.position_size}, Тип: {self.position_type}")
+        self.refresh_interval = int(self.settings.value("refresh_interval", "10"))
+        print(f"Загружены настройки: Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, Размер позиции: {self.position_size}, Тип: {self.position_type}, Частота обновления: {self.refresh_interval}")
     
 # Тема приложения
 
@@ -397,7 +414,7 @@ class CryptoTradingApp(QWidget):
             self.plot_statistics()
 
 
-        self.formatter_canvas()
+        self.finalize_canvas()
         self.bar.setValue(100)
         self.canvas.draw()
         self.show()
@@ -436,9 +453,6 @@ class CryptoTradingApp(QWidget):
         ab = AnnotationBbox(imagebox, (0.01, 0.02), xycoords='axes fraction', frameon=False, box_alignment=(0, 0))
 
         self.canvas.ax4.add_artist(ab)
-
-        self.canvas.draw()
-        self.show()
 
     def plot_balance(self, balance):
         above_initial = balance['value'] >= self.initial_balance
@@ -617,7 +631,7 @@ class CryptoTradingApp(QWidget):
             else:
                 print(f"Индикатор '{column}' отсутствует в DataFrame.")
 
-    def formatter_canvas(self):
+    def finalize_canvas(self):
         # Легенды
         self.canvas.ax1.legend(loc='upper left')
         self.canvas.ax2.legend(loc='upper right')
@@ -633,7 +647,34 @@ class CryptoTradingApp(QWidget):
         self.canvas.ax1.xaxis.set_major_locator(locator)
         self.canvas.ax1.xaxis.set_major_formatter(formatter)
 
+# Внешние взаимодействия
+
     def open_positions_table(self):
         positions_table = PositionsTable(self.strategy_manager.positions)
         positions_table.exec_()
 
+    def start_chart_updates(self):
+        """Запускает обновление графика в реальном времени."""
+        print('Обновление графика началось')
+        self.thread = DataDownloadThread(self.symbol_input.currentText(), self.interval_input.currentText(), 300, True)
+        self.thread.data_downloaded_run_it.connect(self.on_data_downloaded_run_it)
+
+        self.chart_updater.update_chart_signal.connect(self.update_chart)
+        self.chart_updater.set_refresh_interval(self.refresh_interval)
+        self.chart_updater.start_updating()
+        
+
+
+    def stop_chart_updates(self):
+        """Останавливает обновление графика."""
+        print('Обновление графика приостановлено')
+
+        self.chart_updater.stop_updating()
+        #QMessageBox.information(self, "График", "Обновление графика приостановлено")
+
+    def update_chart(self):
+        """Метод для обновления графика (вставить логику обновления графика)."""
+        print('Обновление')
+        self.thread.start()  # Запускаем поток
+
+        
