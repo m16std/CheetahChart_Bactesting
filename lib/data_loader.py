@@ -6,8 +6,7 @@ import pandas as pd # type: ignore
 
 class DataDownloadThread(QThread):
     # Сигнал завершения скачивания
-    data_downloaded_save_it = pyqtSignal(object)
-    data_downloaded_run_it = pyqtSignal(object)
+    data_downloaded = pyqtSignal(object)
     request_exception = pyqtSignal()
     # Сигнал обновления прогресс-бара
     progress_changed = pyqtSignal(int)
@@ -30,10 +29,7 @@ class DataDownloadThread(QThread):
         if len(data) == 0:
             self.request_exception.emit()
         else:
-            if self.run_or_save:
-                self.data_downloaded_run_it.emit(data)
-            else:
-                self.data_downloaded_save_it.emit(data)
+            self.data_downloaded.emit(data)
 
         
     def get_okx_ohlcv(self, symbol, interval, limit):

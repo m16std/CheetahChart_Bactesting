@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QMessageBox
+from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QMessageBox, QAction, QMenu, QMenuBar
 from PyQt5.QtGui import * 
 from PyQt5.QtCore import Qt, QSettings
 import pandas as pd
@@ -45,9 +45,13 @@ class CryptoTradingApp(QWidget):
 
         layout = QVBoxLayout(self)
 
+
         # Создаем лейаут кнопок и добавляем в layout
-        button_layout = self.get_button_layout()
-        layout.addLayout(button_layout)
+        menubar = self.get_menubar()
+        menubar.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(9, 0, 9, 9)
+        #layout.setSpacing(0)
+        layout.addWidget(menubar)
 
         # Создаем лейаут полей ввода и добавляем в layout
         inputs_layout = self.get_inputs_layout()
@@ -83,98 +87,115 @@ class CryptoTradingApp(QWidget):
         self.canvas.updateGeometry()
         self.show()
 
-    def get_button_layout(self):
-
-        style = "border: none; font-size: 12px;"
+    def get_menubar(self):
         
-        button_layout = QHBoxLayout()
+        menubar = QMenuBar()
 
-        self.lr_button = QPushButton('Download and run', self)
-        self.lr_button.clicked.connect(self.download_and_run)
-        self.lr_button.setStyleSheet(style)
-        button_layout.addWidget(self.lr_button)
+        menubar.setStyleSheet("""
+            QMenuBar {
+                font-size: 13px;
+            }
+            QMenu {
+                font-size: 13px; 
+            }
+        """)
 
-        button_layout.addWidget(self.create_vertical_separator())
+        file_menu = QMenu(' Файл ', self)
+        menubar.addMenu(file_menu)
+
+        draw_action = QAction('Открыть', self)
+        draw_action.triggered.connect(self.download_and_draw)
+        file_menu.addAction(draw_action)
+
+        open_action = QAction('Скачать', self)
+        open_action.triggered.connect(self.download_and_save)
+        file_menu.addAction(open_action)
+
+
+
+        strat_menu = QMenu(' Тестирование ', self)
+        menubar.addMenu(strat_menu)
+
+        dat_action = QAction('Скачать данные', self)
+        dat_action.triggered.connect(self.download_and_run)
+
+        oat_action = QAction('Открыть данные', self)
+        oat_action.triggered.connect(self.open_and_run)
+
+        test_action = QAction('Протестировать на текущих данных', self)
+        test_action.triggered.connect(self.download_and_save)
         
-        self.load_button = QPushButton('Download candles', self)
-        self.load_button.clicked.connect(self.download_and_save_candlesticks)
-        self.load_button.setStyleSheet(style)
-        button_layout.addWidget(self.load_button)
+        strat_submenu = strat_menu.addMenu("Запуск")
+        strat_submenu.addAction(dat_action)
+        strat_submenu.addAction(oat_action)
+        strat_submenu.addAction(test_action)
 
-        button_layout.addWidget(self.create_vertical_separator())
+        strat_submenu.addSeparator()
+
+        upd_action = QAction('Запустить', self)
+        upd_action.triggered.connect(self.start_chart_updates)
+
+        stop_upd_action = QAction('Остановить', self)
+        stop_upd_action.triggered.connect(self.stop_chart_updates)
         
-        self.run_button = QPushButton('Run strategy', self)
-        self.run_button.clicked.connect(self.open_and_run)
-        self.run_button.setStyleSheet(style)
-        button_layout.addWidget(self.run_button)
+        strat_submenu = strat_menu.addMenu("Авто-обновление")
+        strat_submenu.addAction(upd_action)
+        strat_submenu.addAction(stop_upd_action)
 
-        button_layout.addWidget(self.create_vertical_separator())
+        strat_submenu.addSeparator()
 
-        self.tai_button = QPushButton('Train AI', self)
-        self.tai_button.clicked.connect(self.ai_manager.train_model)
-        self.tai_button.setStyleSheet(style)
-        button_layout.addWidget(self.tai_button)
+        import_action = QAction('Открыть список позиций', self)
+        import_action.triggered.connect(self.open_positions_table)
+        strat_menu.addAction(import_action)
 
-        button_layout.addWidget(self.create_vertical_separator())
+        strat_submenu.addSeparator()
 
-        self.rai_button = QPushButton('Run AI', self)
-        self.rai_button.clicked.connect(self.ai_manager.run_ai)
-        self.rai_button.setStyleSheet(style)
-        button_layout.addWidget(self.rai_button)
+        import_action = QAction('Добавить стратегию из файла', self)
+        import_action.triggered.connect(self.import_strategy)
+        strat_menu.addAction(import_action)
 
-        button_layout.addWidget(self.create_vertical_separator())
+        reimport_action = QAction('Обновить стратегии', self)
+        reimport_action.triggered.connect(self.load_external_strategies)
+        strat_menu.addAction(reimport_action)
 
-        self.rai_button = QPushButton('Update strats', self)
-        self.rai_button.clicked.connect(self.load_external_strategies)
-        self.rai_button.setStyleSheet(style)
-        button_layout.addWidget(self.rai_button)
+        reimport_action = QAction('Экспорт" стратегии', self)
+        reimport_action.triggered.connect(self.export_strategy)
+        strat_menu.addAction(reimport_action)
 
-        button_layout.addWidget(self.create_vertical_separator())
 
-        self.rai_button = QPushButton('Import strat', self)
-        self.rai_button.setStyleSheet(style)
-        self.rai_button.clicked.connect(self.import_strategy)
-        button_layout.addWidget(self.rai_button)
 
-        button_layout.addWidget(self.create_vertical_separator())
 
-        self.toggle_theme_button = QPushButton("Switch Theme")
-        self.toggle_theme_button.clicked.connect(self.toggle_theme)
-        self.toggle_theme_button.setStyleSheet(style)
-        button_layout.addWidget(self.toggle_theme_button)
+        ai_menu = QMenu(' ИИ ', self)
+        menubar.addMenu(ai_menu)
 
-        button_layout.addWidget(self.create_vertical_separator())
+        tai_action = QAction('Обучить', self)
+        tai_action.triggered.connect(self.ai_manager.train_model)
+        ai_menu.addAction(tai_action)
 
-        self.settings_button = QPushButton("Settings")
-        self.settings_button.clicked.connect(self.open_settings_dialog)
-        self.settings_button.setStyleSheet(style)
-        button_layout.addWidget(self.settings_button)
+        rai_action = QAction('Запустить', self)
+        rai_action.triggered.connect(self.ai_manager.run_ai)
+        ai_menu.addAction(rai_action)
 
-        button_layout.addWidget(self.create_vertical_separator())
 
-        self.view_positions_button = QPushButton("View Positions")
-        self.view_positions_button.clicked.connect(self.open_positions_table)
-        self.view_positions_button.setStyleSheet(style)
-        button_layout.addWidget(self.view_positions_button)
 
-        button_layout.addWidget(self.create_vertical_separator())
+        theme_menu = QMenu(' Оформление ', self)
+        menubar.addMenu(theme_menu)
 
-        self.start_upd_button = QPushButton('Updating', self)
-        self.start_upd_button.clicked.connect(self.start_chart_updates)
-        self.start_upd_button.setStyleSheet(style)
-        button_layout.addWidget(self.start_upd_button)
+        toggle_theme_action = QAction('Сменить тему', self)
+        toggle_theme_action.triggered.connect(self.toggle_theme)
+        theme_menu.addAction(toggle_theme_action)
 
-        button_layout.addWidget(self.create_vertical_separator())
+        settings_menu = QMenu(' Правка ', self)
+        menubar.addMenu(settings_menu)
 
-        self.stop_upd_button = QPushButton('!Updating', self)
-        self.stop_upd_button.clicked.connect(self.stop_chart_updates)
-        self.stop_upd_button.setStyleSheet(style)
-        button_layout.addWidget(self.stop_upd_button)
+        settings_action = QAction('Настройки', self)
+        settings_action.triggered.connect(self.open_settings_dialog)
+        settings_menu.addAction(settings_action)
 
-        spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        button_layout.addItem(spacer)
+        help_menu = QMenu(' Справка ', self)
+        menubar.addMenu(help_menu)
 
-        return button_layout
+        return menubar
 
     def get_inputs_layout(self):
         font_size = 10 
@@ -308,11 +329,15 @@ class CryptoTradingApp(QWidget):
             )
             self.canvas.update_colors(facecolor='#151924', textcolor = 'white')
             self.plot_statistics()
+            self.finalize_canvas()
+            self.draw_canvas()
                 
         else:
             qdarktheme.setup_theme(self.current_theme)
             self.canvas.update_colors(facecolor='#ffffff', textcolor = 'black')
             self.plot_statistics()
+            self.finalize_canvas()
+            self.draw_canvas()
 
     def toggle_theme(self):
         # Переключаем между темной и светлой темой
@@ -339,9 +364,30 @@ class CryptoTradingApp(QWidget):
         run = True
 
         self.thread = DataDownloadThread(symbol, interval, limit, run)
-        self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
-        self.thread.data_downloaded_run_it.connect(self.on_data_downloaded_run_it)
-        self.thread.data_downloaded_save_it.connect(self.on_data_downloaded_save_it)
+        self.thread.progress_changed.connect(self.on_progress_changed) 
+        self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
+        self.thread.start()  # Запускаем поток
+
+    def download_and_save(self):
+        symbol = self.symbol_input.currentText()
+        interval = self.interval_input.currentText()
+        limit = self.limit_input.value()
+        run = False
+    
+        self.thread = DataDownloadThread(symbol, interval, limit, run)
+        self.thread.progress_changed.connect(self.on_progress_changed)
+        self.thread.data_downloaded.connect(self.on_data_downloaded_save_it)
+        self.thread.start()
+
+    def download_and_draw(self):
+        symbol = self.symbol_input.currentText()
+        interval = self.interval_input.currentText()
+        limit = self.limit_input.value()
+        run = True
+
+        self.thread = DataDownloadThread(symbol, interval, limit, run)
+        self.thread.progress_changed.connect(self.on_progress_changed) 
+        self.thread.data_downloaded.connect(self.on_data_downloaded_draw_it)
         self.thread.start()  # Запускаем поток
 
     def on_progress_changed(self, value):
@@ -358,17 +404,15 @@ class CryptoTradingApp(QWidget):
         self.df = data
         self.file_handler.save_candlesticks()
     
-    def download_and_save_candlesticks(self):
-        symbol = self.symbol_input.currentText()
-        interval = self.interval_input.currentText()
-        limit = self.limit_input.value()
-        run = False
-    
-        self.thread = DataDownloadThread(symbol, interval, limit, run)
-        self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
-        self.thread.data_downloaded_run_it.connect(self.on_data_downloaded_run_it)
-        self.thread.data_downloaded_save_it.connect(self.on_data_downloaded_save_it)
-        self.thread.start()
+    def on_data_downloaded_draw_it(self, data):
+        # Метод, который будет вызван после завершения скачивания
+        self.df = data
+        self.canvas.ax1.clear()
+        self.canvas.ax2.clear()
+        self.canvas.ax3.clear()
+        self.plot(self.df, [], [], [])
+
+
 
     def run_strategy(self):
 
@@ -415,9 +459,8 @@ class CryptoTradingApp(QWidget):
 
 
         self.finalize_canvas()
+        self.draw_canvas()
         self.bar.setValue(100)
-        self.canvas.draw()
-        self.show()
 
     def plot_statistics(self):
 
@@ -647,6 +690,11 @@ class CryptoTradingApp(QWidget):
         self.canvas.ax1.xaxis.set_major_locator(locator)
         self.canvas.ax1.xaxis.set_major_formatter(formatter)
 
+    def draw_canvas(self):
+        self.canvas.draw()
+        self.show()
+
+
 # Внешние взаимодействия
 
     def open_positions_table(self):
@@ -657,7 +705,7 @@ class CryptoTradingApp(QWidget):
         """Запускает обновление графика в реальном времени."""
         print('Обновление графика началось')
         self.thread = DataDownloadThread(self.symbol_input.currentText(), self.interval_input.currentText(), 300, True)
-        self.thread.data_downloaded_run_it.connect(self.on_data_downloaded_run_it)
+        self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
 
         self.chart_updater.update_chart_signal.connect(self.update_chart)
         self.chart_updater.set_refresh_interval(self.refresh_interval)

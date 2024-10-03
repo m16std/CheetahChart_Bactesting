@@ -13,11 +13,11 @@ class SettingsDialog(QDialog):
         self.leverage_input = QLineEdit()
         self.profit_factor_input = QLineEdit()
         self.position_size_input = QLineEdit()
-        #self.refresh_interval_input = QLineEdit()
-        self.refresh_interval_input = QSpinBox(self)
-        self.refresh_interval_input.setMinimum(5)   # Минимум 5 секунд
-        self.refresh_interval_input.setMaximum(900)  # Максимум 15 минут (900 секунд)
-        self.refresh_interval_input.setValue(10)    # Значение по умолчанию 60 секунд (1 минута)
+        self.refresh_interval_input = QLineEdit()
+        #self.refresh_interval_input = QSpinBox(self)
+        #self.refresh_interval_input.setMinimum(5)   # Минимум 5 секунд
+        #self.refresh_interval_input.setMaximum(900)  # Максимум 15 минут (900 секунд)
+        #self.refresh_interval_input.setValue(10)    # Значение по умолчанию 60 секунд (1 минута)
 
 
         # Добавляем выпадающий список для выбора вариации позиции
@@ -47,7 +47,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.refresh_interval_input)
 
         save_button = QPushButton("Сохранить")
-        save_button.clicked.connect(self.save_settings)
+        save_button.clicked.connect(self.validate_fields)
         layout.addWidget(save_button)
 
         self.setLayout(layout)
@@ -74,6 +74,22 @@ class SettingsDialog(QDialog):
             self.position_type_combo.setCurrentIndex(0)
         else:
             self.position_type_combo.setCurrentIndex(1)
+
+    def validate_fields(self):
+        # Проверка полей
+        try:
+            num1 = float(self.commission_input.text())
+            num2 = float(self.initial_balance_input.text())
+            num3 = float(self.leverage_input.text())
+            num4 = float(self.profit_factor_input.text())
+            num5 = float(self.position_size_input.text())
+            num6 = float(self.refresh_interval_input.text())
+            num7 = float(self.initial_balance_input.text())
+            self.save_settings()
+        except ValueError:
+            # Сообщение об ошибке, если не число
+            QMessageBox.critical(self, "Error", "Проверьте, что в полях корректно указаны числа. Десятичная дробь должна писаться через точку.", QMessageBox.Ok)
+            return
 
     def save_settings(self):
         # Сохраняем введенные пользователем значения

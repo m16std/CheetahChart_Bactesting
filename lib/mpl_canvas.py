@@ -7,7 +7,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 class MPlCanvas(FigureCanvas):
 
     def __init__(self, facecolor, textcolor):
-        self.fig, (self.ax1, self.ax3) = plt.subplots(2, 1, figsize=(12, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, facecolor=facecolor)
+        self.fig, (self.ax1, self.ax3) = plt.subplots(2, 1, figsize=(18, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, facecolor=facecolor)
 
         # Вызов конструктора базового класса FigureCanvas
         super(MPlCanvas, self).__init__(self.fig)
