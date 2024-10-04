@@ -1,7 +1,8 @@
 import sys
 from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QMessageBox, QAction, QMenu, QMenuBar
-from PyQt5.QtGui import * 
+from PyQt5.QtGui import QPainter, QPixmap, QIcon
 from PyQt5.QtCore import Qt, QSettings
+from PyQt5.QtSvg import QSvgRenderer
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -39,27 +40,41 @@ class CryptoTradingApp(QWidget):
         self.df = []
         self.setWindowTitle('Cheetos Trading')
 
+        # Загружаем настройки    
+        self.settings = QSettings("MyApp", "MyCompany")
+        self.load_settings()
+
         self.data_loader = None
         self.current_data = None
         self.setGeometry(100, 100, 1300, 800)
 
-        layout = QVBoxLayout(self)
+        self.layout = QVBoxLayout(self)
 
-
-        # Создаем лейаут кнопок и добавляем в layout
-        menubar = self.get_menubar()
-        menubar.setContentsMargins(0, 0, 0, 0)
-        layout.setContentsMargins(9, 0, 9, 9)
-        #layout.setSpacing(0)
-        layout.addWidget(menubar)
 
         # Создаем лейаут полей ввода и добавляем в layout
         inputs_layout = self.get_inputs_layout()
-        layout.addLayout(inputs_layout)
+        self.layout.addLayout(inputs_layout)
+
+        self.stats = {'winrate': '0%', \
+            'profit': '0%', \
+            'trades': '0', \
+            'period': '0 days', \
+            'init': '0 USDT', \
+            'final': '0 USDT', \
+            'drawdown': '0%'}
 
         # Создаем canvas и добавляем в layout
         self.canvas = MPlCanvas(facecolor='#151924', textcolor = 'white')
-        layout.addWidget(self.canvas)
+        self.layout.addWidget(self.canvas)
+
+        
+        # Загружаем тему
+        self.current_theme = self.load_theme() 
+        self.apply_theme()
+
+        self.menubar = self.get_menubar()
+        self.layout.setContentsMargins(9, 0, 9, 9)
+        self.layout.setMenuBar(self.menubar)
 
         # Включаем масштабирование и перемещения графиков
         self.toolbar = NavigationToolbar(self.canvas, self)
@@ -68,26 +83,19 @@ class CryptoTradingApp(QWidget):
         self.toolbar.setParent(None)
         #layout.addWidget(self.toolbar)
 
-        self.stats = {'winrate': '0%', \
-                'profit': '0%', \
-                'trades': '0', \
-                'period': '0 days', \
-                'init': '0 USDT', \
-                'final': '0 USDT', \
-                'drawdown': '0%'}
-
-        # Загружаем настройки    
-        self.settings = QSettings("MyApp", "MyCompany")
-        self.load_settings()
-
-        # Загружаем тему
-        self.current_theme = self.load_theme() 
-        self.apply_theme()
-
         self.canvas.updateGeometry()
         self.show()
 
     def get_menubar(self):
+
+        if self.current_theme == "dark":
+            icon_color = Qt.white        
+        else:
+            icon_color = Qt.black
+
+        if hasattr(self, 'menubar'):
+            self.layout.removeWidget(self.menubar)
+            self.menubar.deleteLater()
         
         menubar = QMenuBar()
 
@@ -102,16 +110,21 @@ class CryptoTradingApp(QWidget):
 
         file_menu = QMenu(' Файл ', self)
         menubar.addMenu(file_menu)
-
-        draw_action = QAction('Открыть', self)
-        draw_action.triggered.connect(self.download_and_draw)
+        
+        draw_action = QAction("Открыть", self)
+        draw_action.triggered.connect(self.open_and_draw)
+        draw_action.setIcon(self.recolor_svg_icon("resources/folder.svg", icon_color))
         file_menu.addAction(draw_action)
 
-        open_action = QAction('Скачать', self)
+        open_action = QAction('Скачать и сохранить', self)
         open_action.triggered.connect(self.download_and_save)
+        open_action.setIcon(self.recolor_svg_icon("resources/download.svg", icon_color))
         file_menu.addAction(open_action)
 
-
+        dad_action = QAction("Скачать и посмотреть", self)
+        dad_action.triggered.connect(self.download_and_draw)
+        dad_action.setIcon(self.recolor_svg_icon("resources/file.svg", icon_color))
+        file_menu.addAction(dad_action)
 
         strat_menu = QMenu(' Тестирование ', self)
         menubar.addMenu(strat_menu)
@@ -126,11 +139,12 @@ class CryptoTradingApp(QWidget):
         test_action.triggered.connect(self.download_and_save)
         
         strat_submenu = strat_menu.addMenu("Запуск")
+        strat_submenu.setIcon(self.recolor_svg_icon("resources/stopwatch.svg", icon_color))
         strat_submenu.addAction(dat_action)
         strat_submenu.addAction(oat_action)
         strat_submenu.addAction(test_action)
 
-        strat_submenu.addSeparator()
+        strat_menu.addSeparator()
 
         upd_action = QAction('Запустить', self)
         upd_action.triggered.connect(self.start_chart_updates)
@@ -138,29 +152,34 @@ class CryptoTradingApp(QWidget):
         stop_upd_action = QAction('Остановить', self)
         stop_upd_action.triggered.connect(self.stop_chart_updates)
         
-        strat_submenu = strat_menu.addMenu("Авто-обновление")
-        strat_submenu.addAction(upd_action)
-        strat_submenu.addAction(stop_upd_action)
+        upd_submenu = strat_menu.addMenu("Авто-обновление")
+        upd_submenu.setIcon(self.recolor_svg_icon("resources/time-refresh.svg", icon_color))
+        upd_submenu.addAction(upd_action)
+        upd_submenu.addAction(stop_upd_action)
 
-        strat_submenu.addSeparator()
+        strat_menu.addSeparator()
 
-        import_action = QAction('Открыть список позиций', self)
-        import_action.triggered.connect(self.open_positions_table)
-        strat_menu.addAction(import_action)
+        open_poss_action = QAction('Открыть список позиций', self)
+        open_poss_action.triggered.connect(self.open_positions_table)
+        open_poss_action.setIcon(self.recolor_svg_icon("resources/binoculars.svg", icon_color))
+        strat_menu.addAction(open_poss_action)
 
         strat_submenu.addSeparator()
 
         import_action = QAction('Добавить стратегию из файла', self)
         import_action.triggered.connect(self.import_strategy)
+        import_action.setIcon(self.recolor_svg_icon("resources/import.svg", icon_color))
         strat_menu.addAction(import_action)
 
         reimport_action = QAction('Обновить стратегии', self)
         reimport_action.triggered.connect(self.load_external_strategies)
+        reimport_action.setIcon(self.recolor_svg_icon("resources/refresh.svg", icon_color))
         strat_menu.addAction(reimport_action)
 
-        reimport_action = QAction('Экспорт" стратегии', self)
-        reimport_action.triggered.connect(self.export_strategy)
-        strat_menu.addAction(reimport_action)
+        export_action = QAction('Экспорт стратегии', self)
+        export_action.triggered.connect(self.export_strategy)
+        export_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
+        strat_menu.addAction(export_action)
 
 
 
@@ -170,10 +189,12 @@ class CryptoTradingApp(QWidget):
 
         tai_action = QAction('Обучить', self)
         tai_action.triggered.connect(self.ai_manager.train_model)
+        tai_action.setIcon(self.recolor_svg_icon("resources/integrations.svg", icon_color))
         ai_menu.addAction(tai_action)
 
         rai_action = QAction('Запустить', self)
         rai_action.triggered.connect(self.ai_manager.run_ai)
+        rai_action.setIcon(self.recolor_svg_icon("resources/brain-organ.svg", icon_color))
         ai_menu.addAction(rai_action)
 
 
@@ -183,6 +204,7 @@ class CryptoTradingApp(QWidget):
 
         toggle_theme_action = QAction('Сменить тему', self)
         toggle_theme_action.triggered.connect(self.toggle_theme)
+        toggle_theme_action.setIcon(self.recolor_svg_icon("resources/theme.svg", icon_color))
         theme_menu.addAction(toggle_theme_action)
 
         settings_menu = QMenu(' Правка ', self)
@@ -190,12 +212,29 @@ class CryptoTradingApp(QWidget):
 
         settings_action = QAction('Настройки', self)
         settings_action.triggered.connect(self.open_settings_dialog)
+        settings_action.setIcon(self.recolor_svg_icon("resources/cogwheel.svg", icon_color))
         settings_menu.addAction(settings_action)
 
         help_menu = QMenu(' Справка ', self)
         menubar.addMenu(help_menu)
 
         return menubar
+    
+    def recolor_svg_icon(self, svg_path, color):
+        renderer = QSvgRenderer(svg_path)
+        pixmap = QPixmap(32, 32)  # Размер иконки
+        pixmap.fill(Qt.transparent)
+        
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(pixmap.rect(), color)
+        painter.end()
+
+        return QIcon(pixmap)
+    
+
+
 
     def get_inputs_layout(self):
         font_size = 10 
@@ -331,6 +370,8 @@ class CryptoTradingApp(QWidget):
             self.plot_statistics()
             self.finalize_canvas()
             self.draw_canvas()
+            self.menubar = self.get_menubar()
+            self.layout.setMenuBar(self.menubar)
                 
         else:
             qdarktheme.setup_theme(self.current_theme)
@@ -338,6 +379,8 @@ class CryptoTradingApp(QWidget):
             self.plot_statistics()
             self.finalize_canvas()
             self.draw_canvas()
+            self.menubar = self.get_menubar()
+            self.layout.setMenuBar(self.menubar)
 
     def toggle_theme(self):
         # Переключаем между темной и светлой темой
@@ -356,6 +399,13 @@ class CryptoTradingApp(QWidget):
     def open_and_run(self):
         if self.file_handler.load_candlesticks():
             self.run_strategy()
+
+    def open_and_draw(self):
+        if self.file_handler.load_candlesticks():
+            self.canvas.ax1.clear()
+            self.canvas.ax2.clear()
+            self.canvas.ax3.clear()
+            self.plot(self.df, [], [], [])
 
     def download_and_run(self):
         symbol = self.symbol_input.currentText()
@@ -698,7 +748,7 @@ class CryptoTradingApp(QWidget):
 # Внешние взаимодействия
 
     def open_positions_table(self):
-        positions_table = PositionsTable(self.strategy_manager.positions)
+        positions_table = PositionsTable(self.strategy_manager.positions, self.current_theme)
         positions_table.exec_()
 
     def start_chart_updates(self):
@@ -710,8 +760,6 @@ class CryptoTradingApp(QWidget):
         self.chart_updater.update_chart_signal.connect(self.update_chart)
         self.chart_updater.set_refresh_interval(self.refresh_interval)
         self.chart_updater.start_updating()
-        
-
 
     def stop_chart_updates(self):
         """Останавливает обновление графика."""

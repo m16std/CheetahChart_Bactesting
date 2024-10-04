@@ -1,12 +1,28 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QDialog
 from PyQt5.QtGui import QColor
+import qdarktheme
 
 class PositionsTable(QDialog):
-    def __init__(self, positions):
+    def __init__(self, positions, current_theme):
         super().__init__()
         self.setWindowTitle('Positions')
         self.setGeometry(100, 100, 1200, 800)
-        self.setStyleSheet("background-color: #131722;") 
+        if current_theme == "dark":
+            qdarktheme.setup_theme(
+                custom_colors={
+                    "[dark]": {
+                        "background": "#151924",
+                        "primary": "#ffffff",
+                        "primary>button.hoverBackground": "#669ff55c",
+                        "primary>progressBar.background": "#669ff5",
+                    }
+                }
+            )
+                
+        else:
+            qdarktheme.setup_theme(current_theme)
+
+
 
         # Создаём таблицу
         self.table_widget = QTableWidget()
@@ -56,7 +72,7 @@ class PositionsTable(QDialog):
             elif pnl_value < 0:
                 color = QColor(242, 54, 69)  # Красный
             else:
-                color = QColor(255, 255, 255)  # Нейтральный цвет для нуля
+                color = QColor(0, 0, 0, 0)  # Нейтральный цвет для нуля
 
             # Устанавливаем прозрачность цвета
             color.setAlphaF(transparency_factor) 
