@@ -15,7 +15,9 @@ class StrategyManager(QThread):
     calculation_complete = pyqtSignal(object, object, object)
     progress_changed = pyqtSignal(int)
     import_complete = pyqtSignal(object, object)
+    create_toast = pyqtSignal(object, object)
     update_chart_signal = pyqtSignal()
+    load_external_strategies_complete = pyqtSignal(object)
  
     def __init__(self, parent=None):
         super(StrategyManager, self).__init__(parent)
@@ -58,6 +60,8 @@ class StrategyManager(QThread):
             self.export_strategy()
         elif mode == "import":
             self.import_strategy()
+        elif mode == "import_all":
+            self.load_strategies_from_directory()
         else:
             print("Неверный режим")
 
@@ -260,10 +264,12 @@ class StrategyManager(QThread):
                 if strategy_function:
                     strategy_function = strategy_function.__get__(self, self.__class__)
                     self.strategy_dict[module_name] = strategy_function
-                    print(f"Стратегия '{name}' загружена из внешней папки")
+                    self.create_toast.emit("Стратегия добавлена", f"Стратегия {name} загружена из внешней папки")
 
             except Exception as e:
                 print(f'Ошибка загрузки стратегии "{module_name}": {str(e)}')
+                
+        self.load_external_strategies_complete.emit(self.strategy_dict)
 
     def export_strategy(self):
         current_strategy = self.find(self.strat_name)
@@ -316,9 +322,6 @@ class StrategyManager(QThread):
 
                     # Сохраняем функцию как обычную
                     self.strategy_dict[strategy_name] = strategy_function
-
-                    print(type(strategy_function))
-                    print(type(self.strategy_dict['RSI']))
 
                     # Обновляем выпадающий список в главном окне
                     self.import_complete.emit(strategy_name, strategy_function)
@@ -442,7 +445,6 @@ class StrategyManager(QThread):
                     position_open = True
 
         return indicators
-
 
     def macd_v2_strategy(self, df, initial_balance, position_size, position_type, profit_factor, leverage, commission):
         # Рисуем индикаторы

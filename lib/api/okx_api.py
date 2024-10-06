@@ -71,3 +71,13 @@ class DataDownloadThread(QThread):
 
         return data
 
+    def get_coins(self):
+        """Загружает список популярных криптовалют и их иконки"""
+        try:
+            url = "https://min-api.cryptocompare.com/data/top/mktcapfull?limit=20&tsym=USD"
+            response = requests.get(url)
+            data = response.json()
+            return data
+        except requests.exceptions.RequestException as err:
+            print(f"Error: {err}")
+            return []
