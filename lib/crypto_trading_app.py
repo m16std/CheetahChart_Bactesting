@@ -1,17 +1,20 @@
-import sys
 from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QMessageBox, QAction, QMenu, QMenuBar
-from PyQt5.QtGui import QPainter, QPixmap, QIcon
-from PyQt5.QtCore import Qt, QSettings
-from PyQt5.QtSvg import QSvgRenderer
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from PyQt5.QtGui import QPainter, QPixmap, QIcon, QColor
+from PyQt5.QtCore import Qt, QSettings, QSize
+from PyQt5.QtSvg import QSvgRenderer
+import matplotlib.dates as mdates
 import matplotlib.image as mpimg
-import qdarktheme
+import matplotlib.pyplot as plt
+from io import BytesIO
+from PIL import Image
+import pandas as pd
 import numpy as np
+import qdarktheme
+import requests
 import math
+import os
 
 from lib.file_manager import FileManager 
 from lib.neural_network import AIManager
@@ -31,6 +34,7 @@ class CryptoTradingApp(QWidget):
         self.strategy_manager = StrategyManager()
         self.ai_manager = AIManager(self)
         self.chart_updater = ChartUpdater()
+        self.icon_dir = "resources/crypto_icons"
         self.initUI()       
         self.load_external_strategies()
       
@@ -73,7 +77,7 @@ class CryptoTradingApp(QWidget):
         self.apply_theme()
 
         self.menubar = self.get_menubar()
-        self.layout.setContentsMargins(9, 0, 9, 9)
+        self.layout.setContentsMargins(9, 9, 9, 9)
         self.layout.setMenuBar(self.menubar)
 
         # Включаем масштабирование и перемещения графиков
@@ -108,9 +112,13 @@ class CryptoTradingApp(QWidget):
             }
         """)
 
+        logo_action = QAction(QIcon("resources/smolcheetos.png"), "", self)
+        menubar.addAction(logo_action)
+
         file_menu = QMenu(' Файл ', self)
         menubar.addMenu(file_menu)
-        
+
+
         draw_action = QAction("Открыть", self)
         draw_action.triggered.connect(self.open_and_draw)
         draw_action.setIcon(self.recolor_svg_icon("resources/folder.svg", icon_color))
@@ -129,15 +137,15 @@ class CryptoTradingApp(QWidget):
         strat_menu = QMenu(' Тестирование ', self)
         menubar.addMenu(strat_menu)
 
-        dat_action = QAction('Скачать данные', self)
+        dat_action = QAction('Загрузить данные', self)
         dat_action.triggered.connect(self.download_and_run)
 
         oat_action = QAction('Открыть данные', self)
         oat_action.triggered.connect(self.open_and_run)
 
         test_action = QAction('Протестировать на текущих данных', self)
-        test_action.triggered.connect(self.download_and_save)
-        
+        test_action.triggered.connect(self.run_strategy)
+
         strat_submenu = strat_menu.addMenu("Запуск")
         strat_submenu.setIcon(self.recolor_svg_icon("resources/stopwatch.svg", icon_color))
         strat_submenu.addAction(dat_action)
@@ -184,6 +192,19 @@ class CryptoTradingApp(QWidget):
 
 
 
+        trade_menu = QMenu(' Торговля ', self)
+        menubar.addMenu(trade_menu)
+
+        set_api_action = QAction('Настроить API', self)
+        set_api_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
+        trade_menu.addAction(set_api_action)
+
+        trade_start_action = QAction('Запустить', self)
+        trade_start_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
+        trade_menu.addAction(trade_start_action)
+
+
+
         ai_menu = QMenu(' ИИ ', self)
         menubar.addMenu(ai_menu)
 
@@ -212,7 +233,7 @@ class CryptoTradingApp(QWidget):
 
         settings_action = QAction('Настройки', self)
         settings_action.triggered.connect(self.open_settings_dialog)
-        settings_action.setIcon(self.recolor_svg_icon("resources/cogwheel.svg", icon_color))
+        settings_action.setIcon(self.recolor_svg_icon("resources/settings2.svg", icon_color))
         settings_menu.addAction(settings_action)
 
         help_menu = QMenu(' Справка ', self)
@@ -232,15 +253,17 @@ class CryptoTradingApp(QWidget):
         painter.end()
 
         return QIcon(pixmap)
-    
-
-
 
     def get_inputs_layout(self):
         font_size = 10 
 
+        #self.symbol_input = QComboBox(self)
+        #self.symbol_input.addItems(['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'PEPE-USDT', 'TON-USDT', 'BNB-USDT'])
         self.symbol_input = QComboBox(self)
-        self.symbol_input.addItems(['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'PEPE-USDT', 'TON-USDT', 'BNB-USDT'])
+        self.symbol_input.setMinimumWidth(200)
+        self.symbol_input.setIconSize(QSize(40, 40))  # Устанавливаем размер иконки
+        self.symbol_input.setFixedHeight(40)  # Высота ComboBox
+        self.update_crypto_dropdown()
 
         font = self.symbol_input.font()
         font.setPointSize(font_size)
@@ -248,6 +271,8 @@ class CryptoTradingApp(QWidget):
 
         self.interval_input = QComboBox(self)
         self.interval_input.addItems(['1m', '5m', '15m','30m', '1H', '4H', '12H','1D'])
+        self.interval_input.setFixedHeight(40)  # Высота ComboBox
+        
         self.interval_input.setCurrentIndex(2)
 
         font = self.interval_input.font()
@@ -272,11 +297,9 @@ class CryptoTradingApp(QWidget):
         font = self.strat_input.font()
         font.setPointSize(font_size)
         self.strat_input.setFont(font)
+        self.strat_input.setFixedHeight(40) 
 
-        self.symbol_input.setStyleSheet("border: none;")
-        self.interval_input.setStyleSheet("border: none;")
-        self.limit_input.setStyleSheet("border: none;")
-        self.strat_input.setStyleSheet("border: none;")
+
 
         inputs_layout = QHBoxLayout()
 
@@ -288,6 +311,71 @@ class CryptoTradingApp(QWidget):
 
         return inputs_layout
     
+    def load_icon_from_file(self, crypto_name):
+        """Загружает иконку из локальной директории, если она существует"""
+        icon_path = os.path.join(self.icon_dir, f"{crypto_name}.png")
+        if os.path.exists(icon_path):
+            return QPixmap(icon_path)
+        return None
+
+    def load_icon_from_url(self, crypto_name, url):
+        """Загружает иконку с сервера и сохраняет её в локальную директорию"""
+        icon_path = os.path.join(self.icon_dir, f"{crypto_name}.png")
+
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                with open(icon_path, 'wb') as f:
+                    f.write(response.content)
+                pixmap = QPixmap(icon_path)
+                return pixmap
+            else:
+                raise ValueError("Ошибка загрузки иконки с сервера")
+        except Exception as e:
+            QMessageBox.warning(self, "Ошибка загрузки иконки", f"Ошибка: {str(e)}")
+            return QPixmap()  # Пустая иконка, если произошла ошибка
+
+    def load_crypto_list(self):
+        """Загружает список популярных криптовалют и их иконки"""
+        stablecoins = {'USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'PAX', 'GUSD', 'SUSD'}
+        url = "https://min-api.cryptocompare.com/data/top/mktcapfull?limit=20&tsym=USD"
+        response = requests.get(url)
+        data = response.json()
+
+        crypto_list = []
+        for coin in data['Data']:
+                symbol = coin['CoinInfo']['Name']
+                if symbol not in stablecoins:
+                    crypto_name = coin['CoinInfo']['Name']
+                    icon_url = f"https://www.cryptocompare.com{coin['CoinInfo']['ImageUrl']}"
+
+                    # Попытка загрузить иконку из файла
+                    pixmap = self.load_icon_from_file(crypto_name)
+                    
+                    if pixmap is None:
+                        # Если иконка не найдена, загружаем её с API
+                        pixmap = self.load_icon_from_url(crypto_name, icon_url)
+
+                    crypto_list.append((crypto_name, pixmap))
+
+        return crypto_list
+    
+    def update_crypto_dropdown(self):
+        """Обновляет выпадающий список криптовалют"""
+        crypto_list = self.load_crypto_list()
+
+        # Очищаем выпадающий список перед обновлением
+        self.symbol_input.clear()
+
+        # Добавляем новые элементы в выпадающий список
+        for crypto_name, pixmap in crypto_list:
+            if pixmap is not None and not pixmap.isNull():
+                self.symbol_input.addItem(QIcon(pixmap), str(crypto_name+'-USDT'))
+            else:
+                # Если иконка не найдена, используем дефолтную иконку
+                self.symbol_input.addItem(QIcon("resources/crypto_icons/default.png"), crypto_name)
+
+
     def create_vertical_separator(self):
         # Создаем QFrame для вертикального разделителя
         separator = QFrame()
@@ -411,6 +499,7 @@ class CryptoTradingApp(QWidget):
         symbol = self.symbol_input.currentText()
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
+        self.bar.setFormat("Загрузка")
         run = True
 
         self.thread = DataDownloadThread(symbol, interval, limit, run)
@@ -422,6 +511,7 @@ class CryptoTradingApp(QWidget):
         symbol = self.symbol_input.currentText()
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
+        self.bar.setFormat("Загрузка")
         run = False
     
         self.thread = DataDownloadThread(symbol, interval, limit, run)
@@ -433,6 +523,7 @@ class CryptoTradingApp(QWidget):
         symbol = self.symbol_input.currentText()
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
+        self.bar.setFormat("Загрузка")
         run = True
 
         self.thread = DataDownloadThread(symbol, interval, limit, run)
@@ -465,9 +556,7 @@ class CryptoTradingApp(QWidget):
 
 
     def run_strategy(self):
-
         self.thread = self.strategy_manager
-
         self.thread.profit_factor = self.profit_factor
         self.thread.leverage = self.leverage
         self.thread.initial_balance = self.initial_balance
@@ -476,6 +565,8 @@ class CryptoTradingApp(QWidget):
         self.thread.df = self.df
         self.thread.strat_name = self.strat_input.currentText()
         self.thread.commission = self.commission
+
+        self.bar.setFormat("Тестирование")
 
         self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
         self.thread.calculation_complete.connect(self.on_calculation_complete)
@@ -490,6 +581,7 @@ class CryptoTradingApp(QWidget):
 # Отрисовка графиков
 
     def plot(self, df, positions, balance, indicators):
+        self.bar.setFormat("Отрисовка")
 
         if len(df) <= 5000 and len(df) > 0:
             # Рисуем индикаторы
@@ -511,6 +603,7 @@ class CryptoTradingApp(QWidget):
         self.finalize_canvas()
         self.draw_canvas()
         self.bar.setValue(100)
+        self.bar.setFormat("Готово")
 
     def plot_statistics(self):
 

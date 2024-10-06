@@ -70,3 +70,4 @@ class DataDownloadThread(QThread):
         data.set_index('ts', inplace=True)
 
         return data
+
