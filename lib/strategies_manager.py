@@ -65,6 +65,11 @@ class StrategyManager(QThread):
         else:
             print("Неверный режим")
 
+        return
+
+    def stop(self):
+        self.terminate()
+
     def run_strategy(self):
         current_strategy = self.strategy_dict.get(self.strat_name)
         self.current_balance = self.initial_balance    
@@ -74,6 +79,7 @@ class StrategyManager(QThread):
         indicators = current_strategy(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor)
         self.balance = self.calculate_balance(self.df, self.positions, self.initial_balance, self.leverage)
         self.calculation_complete.emit(self.positions, self.balance, indicators)
+        
 
 
 # Приспособы для работы стратегий
@@ -108,8 +114,8 @@ class StrategyManager(QThread):
             'openTimestamp': timestamp,
             'leverage': self.leverage,
             'status': 'open',
-            'closePrice': openPrice,
-            'closeTimestamp': timestamp,
+            'closePrice': 0,
+            'closeTimestamp': 0,
             'pnl': 0,
             'commission': 0
         }
@@ -127,6 +133,7 @@ class StrategyManager(QThread):
         :slTriggerPx: Цена стоп-лосса
         :timestamp: Время
         """
+
         position = next((t for t in self.positions if t['posId'] == posId), None)
         if position is None:
             raise ValueError(f"Position with ID {posId} not found")
@@ -203,12 +210,20 @@ class StrategyManager(QThread):
             while df.index[i] <= position['openTimestamp'] and df.index[i] < df.index[-1]:
                 balance.append([df.index[i].to_pydatetime(), current_balance])
                 i += 1
-            while df.index[i] < position['closeTimestamp'] and df.index[i] < df.index[-1]:
-                if position['posSide'] == 'long':
-                    balance.append([df.index[i].to_pydatetime(), current_balance + position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
-                else:
-                    balance.append([df.index[i].to_pydatetime(), current_balance - position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
-                i += 1
+            if position['status'] == 'closed':
+                while df.index[i] < position['closeTimestamp'] and df.index[i] < df.index[-1]:
+                    if position['posSide'] == 'long':
+                        balance.append([df.index[i].to_pydatetime(), current_balance + position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                    else:
+                        balance.append([df.index[i].to_pydatetime(), current_balance - position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                    i += 1
+            else:
+                while df.index[i] < df.index[-1]:
+                    if position['posSide'] == 'long':
+                        balance.append([df.index[i].to_pydatetime(), current_balance + position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                    else:
+                        balance.append([df.index[i].to_pydatetime(), current_balance - position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                    i += 1
             current_balance += position['pnl']
             
         while df.index[i] < df.index[-1]:
@@ -268,7 +283,7 @@ class StrategyManager(QThread):
 
             except Exception as e:
                 print(f'Ошибка загрузки стратегии "{module_name}": {str(e)}')
-                
+
         self.load_external_strategies_complete.emit(self.strategy_dict)
 
     def export_strategy(self):

@@ -288,6 +288,7 @@ class CryptoTradingApp(QWidget):
         self.limit_input = QSpinBox(self)
         self.limit_input.setRange(100, 100000)
         self.limit_input.setValue(1000)
+        self.limit_input.setSingleStep(500)
 
         font = self.limit_input.font()
         font.setPointSize(font_size)
@@ -395,16 +396,13 @@ class CryptoTradingApp(QWidget):
     def load_external_strategies(self):
         strategy_directory = self.file_handler.check_strategy_directory()
         if strategy_directory != None:
-            self.thread = StrategyManager()   
-            self.thread.strategy_directory = strategy_directory 
-            self.thread.load_external_strategies_complete.connect(self.update_strat_input)
-            self.thread.create_toast.connect(self.show_toast)
-            self.thread.run(mode="import_all") 
+            self.strategy_manager.strategy_directory = strategy_directory 
+            self.strategy_manager.load_strategies_from_directory()
+            self.update_strat_input()
 
-    def update_strat_input(self, strategy_dict):
-        self.strategy_manager.strategy_dict = strategy_dict
+    def update_strat_input(self):
         self.strat_input.clear()
-        self.strat_input.addItems(strategy_dict.keys())
+        self.strat_input.addItems(self.strategy_manager.strategy_dict.keys())
         
 
 # Настройки
@@ -522,6 +520,9 @@ class CryptoTradingApp(QWidget):
 
     def on_data_downloaded_run_it(self, data):
         # Метод, который будет вызван после завершения скачивания
+        self.thread.progress_changed.disconnect(self.on_progress_changed) 
+        self.thread.data_downloaded.disconnect(self.on_data_downloaded_run_it)
+        self.thread = None
         self.df = data
         self.run_strategy()
 
@@ -539,7 +540,10 @@ class CryptoTradingApp(QWidget):
         self.plot(self.df, [], [], [])
 
     def run_strategy(self):
+        self.bar.setFormat("Тестирование")
+
         self.thread = self.strategy_manager
+
         self.thread.profit_factor = self.profit_factor
         self.thread.leverage = self.leverage
         self.thread.initial_balance = self.initial_balance
@@ -549,8 +553,6 @@ class CryptoTradingApp(QWidget):
         self.thread.strat_name = self.strat_input.currentText()
         self.thread.commission = self.commission
 
-        self.bar.setFormat("Тестирование")
-
         self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
         self.thread.calculation_complete.connect(self.on_calculation_complete)
         self.thread.run() 
@@ -559,7 +561,10 @@ class CryptoTradingApp(QWidget):
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
         self.canvas.ax3.clear()
+        self.thread.progress_changed.disconnect(self.on_progress_changed) 
+        self.thread.calculation_complete.disconnect(self.on_calculation_complete)
         self.plot(self.df, positions, balance, indicators)
+
 
 # Отрисовка графиков
 
@@ -571,10 +576,12 @@ class CryptoTradingApp(QWidget):
             self.plot_indicators(df, indicators)
             # Рисуем свечи            
             self.plot_candles(df)
-            # Рисуем сделки
-            self.plot_trades(positions)
+            
 
         if len(positions) > 0:
+            # Рисуем сделки
+            self.plot_trades(positions)
+            self.bar.setValue(75)
             # Рисуем баланс
             self.plot_balance(balance)
             # Получаем статистику
@@ -682,6 +689,7 @@ class CryptoTradingApp(QWidget):
                     ))  
             
         self.canvas.ax3.legend(loc='upper left')
+        self.bar.setValue(75)
 
     def get_statistic(self, balance, positions):
         # Рассчет максимальной просадки 
@@ -725,50 +733,55 @@ class CryptoTradingApp(QWidget):
         for position in positions:
             if position['posSide'] == 'long':
                 self.canvas.ax1.plot(mdates.date2num(position['openTimestamp']), position['openPrice'], marker='^', color='lime', markersize=7)
-                self.canvas.ax1.plot(mdates.date2num(position['closeTimestamp']), position['closePrice'], marker='X', color='salmon', markersize=7)
+                if position['status'] == 'closed':
+                    self.canvas.ax1.plot(mdates.date2num(position['closeTimestamp']), position['closePrice'], marker='X', color='salmon', markersize=7)
             if position['posSide'] == 'short':
                 self.canvas.ax1.plot(mdates.date2num(position['openTimestamp']), position['openPrice'], marker='v', color='salmon', markersize=7)
-                self.canvas.ax1.plot(mdates.date2num(position['closeTimestamp']), position['closePrice'], marker='X', color='lime', markersize=7)
-        self.bar.setValue(25)
+                if position['status'] == 'closed':
+                    self.canvas.ax1.plot(mdates.date2num(position['closeTimestamp']), position['closePrice'], marker='X', color='lime', markersize=7)
+                else:
+                    self.canvas.ax1.axhline(y = position['openPrice'], xmin = mdates.date2num(position['openTimestamp']), xmax = len(self.df), linestyle = 'dashed', color = '#089981') 
+        
 
         # Рисуем области tp и sl 
         for position in positions:
-            if position['tpTriggerPx'] > 0 and position['slTriggerPx'] > 0:
-                if position['posSide'] == 'long':
-                    self.canvas.ax1.add_patch(plt.Rectangle(
-                        (mdates.date2num(position['openTimestamp']), position['openPrice']),
-                        mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
-                        position['tpTriggerPx'] - position['openPrice'],
-                        color='lightgreen', alpha=0.1
-                    ))
-                    self.canvas.ax1.add_patch(plt.Rectangle(
-                        (mdates.date2num(position['openTimestamp']), position['slTriggerPx']),
-                        mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
-                        position['openPrice'] - position['slTriggerPx'],
-                        color='salmon', alpha=0.1
-                    ))
-                if position['posSide'] == 'short':
-                    self.canvas.ax1.add_patch(plt.Rectangle(
-                        (mdates.date2num(position['openTimestamp']), position['openPrice']),
-                        mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
-                        position['slTriggerPx'] - position['openPrice'],
-                        color='salmon', alpha=0.1
-                    ))
-                    self.canvas.ax1.add_patch(plt.Rectangle(
-                        (mdates.date2num(position['openTimestamp']), position['tpTriggerPx']),
-                        mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
-                        position['openPrice'] - position['tpTriggerPx'],
-                        color='lightgreen', alpha=0.1
-                    ))
-            else:
-                color = 'lightgreen' if position['pnl'] >= 0 else 'salmon'
+            if position['status'] == 'closed':
+                if position['tpTriggerPx'] > 0 and position['slTriggerPx'] > 0:
+                    if position['posSide'] == 'long':
+                        self.canvas.ax1.add_patch(plt.Rectangle(
+                            (mdates.date2num(position['openTimestamp']), position['openPrice']),
+                            mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                            position['tpTriggerPx'] - position['openPrice'],
+                            color='lightgreen', alpha=0.1
+                        ))
+                        self.canvas.ax1.add_patch(plt.Rectangle(
+                            (mdates.date2num(position['openTimestamp']), position['slTriggerPx']),
+                            mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                            position['openPrice'] - position['slTriggerPx'],
+                            color='salmon', alpha=0.1
+                        ))
+                    if position['posSide'] == 'short':
+                        self.canvas.ax1.add_patch(plt.Rectangle(
+                            (mdates.date2num(position['openTimestamp']), position['openPrice']),
+                            mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                            position['slTriggerPx'] - position['openPrice'],
+                            color='salmon', alpha=0.1
+                        ))
+                        self.canvas.ax1.add_patch(plt.Rectangle(
+                            (mdates.date2num(position['openTimestamp']), position['tpTriggerPx']),
+                            mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                            position['openPrice'] - position['tpTriggerPx'],
+                            color='lightgreen', alpha=0.1
+                        ))
+                else:
+                    color = 'lightgreen' if position['pnl'] >= 0 else 'salmon'
 
-                self.canvas.ax1.add_patch(plt.Rectangle(
-                    (mdates.date2num(position['openTimestamp']), position['openPrice']),
-                    mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
-                    position['closePrice'] - position['openPrice'],
-                    color=color, alpha=0.1
-                ))
+                    self.canvas.ax1.add_patch(plt.Rectangle(
+                        (mdates.date2num(position['openTimestamp']), position['openPrice']),
+                        mdates.date2num(position['closeTimestamp']) - mdates.date2num(position['openTimestamp']),
+                        position['closePrice'] - position['openPrice'],
+                        color=color, alpha=0.1
+                    ))
 
     def plot_candles(self, df):
         percent5 = int(len(df) / 20)
@@ -778,7 +791,7 @@ class CryptoTradingApp(QWidget):
 
         for date, open, high, low, close in candlestick_data:
             if index % percent5 == 0:
-                self.bar.setValue(int(index / len(df) * 100))
+                self.bar.setValue(int(index / len(df) * 50))
             index += 1
             color = '#089981' if close >= open else '#F23645'
             if not label_added:
@@ -821,7 +834,6 @@ class CryptoTradingApp(QWidget):
         self.canvas.draw()
         self.show()
 
-
 # Внешние взаимодействия
 
     def open_positions_table(self):
@@ -830,9 +842,15 @@ class CryptoTradingApp(QWidget):
 
     def start_chart_updates(self):
         """Запускает обновление графика в реальном времени."""
-        print('Обновление графика началось')
-        self.thread = DataDownloadThread(self.symbol_input.currentText(), self.interval_input.currentText(), 300, True)
+        symbol = self.symbol_input.currentText()
+        interval = self.interval_input.currentText()
+        limit = self.limit_input.value()
+        self.bar.setFormat("Загрузка")
+        run = True
+        self.thread = DataDownloadThread(symbol, interval, limit, run)
+        self.thread.progress_changed.connect(self.on_progress_changed) 
         self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
+        
 
         self.chart_updater.update_chart_signal.connect(self.update_chart)
         self.chart_updater.set_refresh_interval(self.refresh_interval)
@@ -847,8 +865,8 @@ class CryptoTradingApp(QWidget):
 
     def update_chart(self):
         """Метод для обновления графика (вставить логику обновления графика)."""
-        print('Обновление')
-        self.thread.start()  # Запускаем поток
+        self.bar.setFormat("Загрузка")
+        self.thread.start() 
 
     def show_toast(self, title, text):
         toast = Toast(self)
