@@ -11,18 +11,22 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import qdarktheme
+import datetime
+import logging
 import math
 import os
 
 from lib.api.cryptocompare_api import CryptocompareApi
+from lib.api.okx_trade_api import OKXApi
 from lib.file_manager import FileManager 
+from lib.log_window import LogWindow
 from lib.neural_network import AIManager
 from lib.strategies_manager import StrategyManager
 from lib.settings_window import SettingsDialog
-from lib.api.okx_api import DataDownloadThread
+from lib.api.okx_load_api import DataDownloadThread
 from lib.mpl_canvas import MPlCanvas
 from lib.positions_table import PositionsTable
-from lib.chart_updater import ChartUpdater
+from lib.trading_timer import TradingTimer
 
 pd.options.mode.chained_assignment = None
 
@@ -32,11 +36,18 @@ class CryptoTradingApp(QWidget):
         self.file_handler = FileManager(self)
         self.strategy_manager = StrategyManager()
         self.ai_manager = AIManager(self)
-        self.chart_updater = ChartUpdater()
+        self.chart_updater = TradingTimer()
         self.coin_icon_api = CryptocompareApi()
         self.icon_dir = "resources/crypto_icons"
         self.initUI()       
         self.load_external_strategies()
+        self.api = OKXApi(api_key='your_api_key', api_secret='your_api_secret', passphrase='your_passphrase')
+        logging.basicConfig(filename='trading_log.txt',
+                    level=logging.INFO,
+                    format='%(asctime)s - %(message)s')
+        self.log_window = LogWindow()
+        self.log_data = []
+
       
 # Инициализация окна
 
@@ -196,18 +207,27 @@ class CryptoTradingApp(QWidget):
         strat_menu.addAction(export_action)
 
 
-
-
         trade_menu = QMenu(' Торговля ', self)
         menubar.addMenu(trade_menu)
+
+        trade_start_action = QAction('Запустить', self)
+        trade_start_action.triggered.connect(self.start_trading)
+        trade_start_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
+        trade_menu.addAction(trade_start_action)
+
+        trade_stop_action = QAction('Остновить', self)
+        trade_stop_action.triggered.connect(self.stop_trading)
+        trade_stop_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
+        trade_menu.addAction(trade_stop_action)
+
+        open_log_action = QAction('Открыть логи', self)
+        open_log_action.triggered.connect(self.show_log_window)
+        open_log_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
+        trade_menu.addAction(open_log_action)
 
         set_api_action = QAction('Настроить API', self)
         set_api_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
         trade_menu.addAction(set_api_action)
-
-        trade_start_action = QAction('Запустить', self)
-        trade_start_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
-        trade_menu.addAction(trade_start_action)
 
 
 
@@ -534,6 +554,7 @@ class CryptoTradingApp(QWidget):
     def on_data_downloaded_draw_it(self, data):
         # Метод, который будет вызван после завершения скачивания
         self.df = data
+        print(self.df)
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
         self.canvas.ax3.clear()
@@ -784,7 +805,7 @@ class CryptoTradingApp(QWidget):
                     ))
 
     def plot_candles(self, df):
-        percent5 = int(len(df) / 20)
+        percent5 = int(len(df) / 50)
         index = 0 
         label_added = False
         candlestick_data = zip(mdates.date2num(df.index.to_pydatetime()), df['open'], df['high'], df['low'], df['close'])
@@ -875,3 +896,56 @@ class CryptoTradingApp(QWidget):
         toast.setText(text)
         toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
         toast.show()
+
+
+############
+
+
+    def setup_logging(self, log_file='trading_log.txt'):
+        logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(message)s')
+        logger = logging.getLogger()
+        return logger
+
+    def log_trade_event(self, logger, event):
+        logger.info(event)
+
+    def update_trading(self):
+        # Функция для загрузки данных и синхронизации с биржей
+        print('aaaaa')
+        positions = self.api.get_open_positions()
+        if positions:
+            self.log_trade_event(self.logger, f'Open positions: {positions}')
+
+    def log_message(self, message):
+        logging.info(message)
+
+    def update_logs(self):
+        # Логирование в файл
+        self.thread.start() 
+        message = datetime.datetime.now().strftime("%I:%M:%S %p on %B %d, %Y")
+        self.log_message(message)
+        
+        self.log_data.append(message)
+        self.log_window.update_log(message)
+    
+    def show_log_window(self):
+        self.log_window.show() 
+
+    def start_trading(self):
+        symbol = self.symbol_input.currentText()
+        interval = self.interval_input.currentText()
+        limit = self.limit_input.value()
+        self.bar.setFormat("Загрузка")
+        run = True
+        self.thread = DataDownloadThread(symbol, interval, limit, run)
+        self.thread.progress_changed.connect(self.on_progress_changed) 
+        self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
+
+        self.timer = TradingTimer(sync_interval=1, delay=3)
+        self.timer.update_chart_signal.connect(self.update_logs)
+        self.timer.start()
+
+    def stop_trading(self):
+        self.timer.stop()
+        self.timer = None
+        

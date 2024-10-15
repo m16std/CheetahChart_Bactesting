@@ -60,15 +60,12 @@ class StrategyManager(QThread):
             self.export_strategy()
         elif mode == "import":
             self.import_strategy()
-        elif mode == "import_all":
-            self.load_strategies_from_directory()
+        elif mode == "trade":
+            self.trade()
         else:
             print("Неверный режим")
 
         return
-
-    def stop(self):
-        self.terminate()
 
     def run_strategy(self):
         current_strategy = self.strategy_dict.get(self.strat_name)
