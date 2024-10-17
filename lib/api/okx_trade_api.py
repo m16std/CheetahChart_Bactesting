@@ -52,6 +52,24 @@ class OKXApi:
             'sz': qty
         }
         return self._send_request('POST', 'trade/order', data=data)
+    
+    def update_take_profit(self, position_id, take_profit):
+        """Обновляет тейк-профит на бирже"""
+        try:
+            # Код для обновления тейк-профита на бирже
+            return True
+        except Exception as e:
+            print(f"Ошибка обновления TP для позиции {position_id}: {e}")
+            return False
+    
+    def update_stop_loss(self, position_id, stop_loss):
+        """Обновляет стоп-лосс на бирже"""
+        try:
+            # Код для обновления стоп-лосса на бирже
+            return True
+        except Exception as e:
+            print(f"Ошибка обновления SL для позиции {position_id}: {e}")
+            return False
 
     def get_open_positions(self):
         """Получение всех открытых позиций."""

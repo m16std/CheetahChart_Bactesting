@@ -1,7 +1,7 @@
-from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QPushButton, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QMessageBox, QAction, QMenu, QMenuBar, QLabel
+from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from PyQt5.QtGui import QPainter, QPixmap, QIcon, QColor
+from PyQt5.QtGui import QPainter, QPixmap, QIcon
 from PyQt5.QtCore import Qt, QSettings, QSize
 from pyqttoast import Toast, ToastPreset
 from PyQt5.QtSvg import QSvgRenderer
@@ -16,17 +16,17 @@ import logging
 import math
 import os
 
+from lib.managers.strategies_manager import StrategyManager
+from lib.windows.positions_window import PositionsTable
+from lib.windows.settings_window import SettingsDialog
 from lib.api.cryptocompare_api import CryptocompareApi
-from lib.api.okx_trade_api import OKXApi
-from lib.file_manager import FileManager 
-from lib.log_window import LogWindow
-from lib.neural_network import AIManager
-from lib.strategies_manager import StrategyManager
-from lib.settings_window import SettingsDialog
+from lib.managers.trading_timer import TradingTimer
 from lib.api.okx_load_api import DataDownloadThread
-from lib.mpl_canvas import MPlCanvas
-from lib.positions_table import PositionsTable
-from lib.trading_timer import TradingTimer
+from lib.managers.file_manager import FileManager 
+from lib.managers.neural_network import AIManager
+from lib.managers.mpl_canvas import MPlCanvas
+from lib.windows.log_window import LogWindow
+from lib.api.okx_trade_api import OKXApi
 
 pd.options.mode.chained_assignment = None
 
@@ -46,7 +46,8 @@ class CryptoTradingApp(QWidget):
                     level=logging.INFO,
                     format='%(asctime)s - %(message)s')
         self.log_window = LogWindow()
-        self.log_data = []
+        self.is_trade = False
+        self.positions = None
 
       
 # Инициализация окна
@@ -424,7 +425,6 @@ class CryptoTradingApp(QWidget):
         self.strat_input.clear()
         self.strat_input.addItems(self.strategy_manager.strategy_dict.keys())
         
-
 # Настройки
 
     def open_settings_dialog(self):
@@ -574,18 +574,96 @@ class CryptoTradingApp(QWidget):
         self.thread.strat_name = self.strat_input.currentText()
         self.thread.commission = self.commission
 
-        self.thread.progress_changed.connect(self.on_progress_changed)  # Подключаем слот для прогресса
-        self.thread.calculation_complete.connect(self.on_calculation_complete)
+        self.thread.progress_changed.connect(self.on_progress_changed) 
+
+        if self.is_trade == 1:
+            self.thread.calculation_complete.connect(self.on_calculation_complete_on_trade)
+        else:
+            self.thread.calculation_complete.connect(self.on_calculation_complete)
+        
         self.thread.run() 
     
     def on_calculation_complete(self, positions, balance, indicators):
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
         self.canvas.ax3.clear()
+        self.positions = positions
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.calculation_complete.disconnect(self.on_calculation_complete)
         self.plot(self.df, positions, balance, indicators)
 
+    def on_calculation_complete_on_trade(self, positions, balance, indicators):
+        print(positions)
+        self.canvas.ax1.clear()
+        self.canvas.ax2.clear()
+        self.canvas.ax3.clear()
+        self.positions = self.compare_positions(positions, self.positions)
+        self.thread.progress_changed.disconnect(self.on_progress_changed) 
+        self.thread.calculation_complete.disconnect(self.on_calculation_complete_on_trade)
+        self.plot(self.df, positions, balance, indicators)
+
+
+    def compare_positions(self, current_positions, previous_positions):
+        print(current_positions)
+        print(previous_positions)
+        log = []
+        """
+        Синхронизирует изменения между таблицами позиций и записывает лог в файл.
+        
+        :param current_positions: DataFrame с текущими позициями
+        :param previous_positions: DataFrame с позициями с предыдущего цикла или None, если это первый цикл
+        :param exchange_api: Объект API для работы с биржей
+        :param log_file_path: Путь к файлу для записи логов
+        :return: Обновленная таблица с синхронизацией
+        """
+            # Первый цикл: если нет предыдущей таблицы
+        if not previous_positions:
+            for pos in current_positions:
+                pos['syncStatus'] = 'synced'  # Добавляем поле синхронизации
+            return current_positions
+        
+        # Сравнение текущих и предыдущих позиций
+        for current_pos in current_positions:
+            matching_pos = next((p for p in previous_positions if p['posId'] == current_pos['posId']), None)
+            
+            # Игнорируем не синхронизированные позиции из предыдущей таблицы
+            if matching_pos and matching_pos['syncStatus'] == 'unsynced':
+                continue
+            
+            # Обрабатываем изменения тейка, стопа, статуса
+            if matching_pos:
+                changes = []
+
+                if current_pos['tpTriggerPx'] != matching_pos['tpTriggerPx']:
+                    changes.append('take profit changed')
+
+                if current_pos['slTriggerPx'] != matching_pos['slTriggerPx']:
+                    changes.append('stop loss changed')
+
+                if current_pos['status'] != matching_pos['status']:
+                    changes.append(f"status changed to {current_pos['status']}")
+
+                if changes:
+                    try:
+                        # Пытаемся синхронизировать с биржей
+                        self.api.sync_position(current_pos)
+                        current_pos['syncStatus'] = 'synced'
+                        log.append(f"Position {current_pos['posId']} synced: {', '.join(changes)}")
+                    except Exception as e:
+                        current_pos['syncStatus'] = 'unsynced'
+                        log.append(f"Error syncing position {current_pos['posId']}: {str(e)}")
+            else:
+                # Новая позиция
+                try:
+                    self.api.open_position(current_pos)
+                    current_pos['syncStatus'] = 'synced'
+                    log.append(f"New position {current_pos['posId']} opened")
+                except Exception as e:
+                    current_pos['syncStatus'] = 'unsynced'
+                    log.append(f"Error opening new position {current_pos['posId']}: {str(e)}")
+        
+        print(log)
+        return current_positions
 
 # Отрисовка графиков
 
@@ -858,7 +936,7 @@ class CryptoTradingApp(QWidget):
 # Внешние взаимодействия
 
     def open_positions_table(self):
-        positions_table = PositionsTable(self.strategy_manager.positions, self.current_theme)
+        positions_table = PositionsTable(self.positions, self.current_theme, self.show_synced_column)
         positions_table.exec_()
 
     def start_chart_updates(self):
@@ -900,52 +978,54 @@ class CryptoTradingApp(QWidget):
 
 ############
 
-
-    def setup_logging(self, log_file='trading_log.txt'):
-        logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(message)s')
-        logger = logging.getLogger()
-        return logger
-
-    def log_trade_event(self, logger, event):
-        logger.info(event)
-
-    def update_trading(self):
-        # Функция для загрузки данных и синхронизации с биржей
-        print('aaaaa')
-        positions = self.api.get_open_positions()
-        if positions:
-            self.log_trade_event(self.logger, f'Open positions: {positions}')
-
-    def log_message(self, message):
-        logging.info(message)
-
-    def update_logs(self):
-        # Логирование в файл
-        self.thread.start() 
-        message = datetime.datetime.now().strftime("%I:%M:%S %p on %B %d, %Y")
-        self.log_message(message)
-        
-        self.log_data.append(message)
-        self.log_window.update_log(message)
-    
-    def show_log_window(self):
-        self.log_window.show() 
-
     def start_trading(self):
-        symbol = self.symbol_input.currentText()
-        interval = self.interval_input.currentText()
-        limit = self.limit_input.value()
+        self.is_trade = True
+        self.positions = None
         self.bar.setFormat("Загрузка")
-        run = True
-        self.thread = DataDownloadThread(symbol, interval, limit, run)
-        self.thread.progress_changed.connect(self.on_progress_changed) 
-        self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
 
         self.timer = TradingTimer(sync_interval=1, delay=3)
-        self.timer.update_chart_signal.connect(self.update_logs)
+        self.timer.update_chart_signal.connect(self.update_trading)
         self.timer.start()
 
     def stop_trading(self):
         self.timer.stop()
         self.timer = None
+        self.is_trade = False
+        
+
+    def setup_logging(self, log_file='trading_log.txt'):
+        logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(message)s')
+        logger = logging.getLogger()
+        return logger
+    
+    def show_log_window(self):
+        self.log_window.show() 
+
+    def log_message(self, message):
+        logging.info(message)
+
+
+
+
+    def update_trading(self):
+        # Функция для загрузки данных и синхронизации с биржей
+        symbol = self.symbol_input.currentText()
+        interval = self.interval_input.currentText()
+        limit = self.limit_input.value()
+        run = True
+        self.thread = DataDownloadThread(symbol, interval, limit, run)
+        self.thread.progress_changed.connect(self.on_progress_changed) 
+        self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
+        self.thread.start() 
+        message = datetime.datetime.now().strftime("%I:%M:%S %p on %B %d, %Y")
+        self.log_message(message)
+        self.log_window.update_log(message)
+        
+
+
+
+    
+    
+
+
         

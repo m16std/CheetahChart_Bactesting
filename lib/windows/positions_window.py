@@ -3,7 +3,7 @@ from PyQt5.QtGui import QColor
 import qdarktheme
 
 class PositionsTable(QDialog):
-    def __init__(self, positions, current_theme):
+    def __init__(self, positions, current_theme, show_synced_column=False):
         super().__init__()
         self.setWindowTitle('Positions')
         self.setGeometry(100, 100, 1200, 800)
@@ -35,7 +35,7 @@ class PositionsTable(QDialog):
         # Устанавливаем заголовки столбцов
         self.table_widget.setHorizontalHeaderLabels([
             'ID', 'Side', 'Order Type', 'Status', 'Quantity', 'Leverage', 'TP Trigger', 'SL Trigger', 'Open Price', 
-             'Close Price', 'Open Time', 'Close Time', 'PnL', 'Commission'
+             'Close Price', 'Open Time', 'Close Time', 'PnL', 'Commission', 'Synced'
         ])
 
         # Заполняем таблицу данными о позициях
@@ -54,6 +54,8 @@ class PositionsTable(QDialog):
             self.table_widget.setItem(row, 11, QTableWidgetItem(str(position['closeTimestamp'])))
             self.table_widget.setItem(row, 12, QTableWidgetItem(str(round(position['pnl'], 3))))
             self.table_widget.setItem(row, 13, QTableWidgetItem(str(round(position['commission'], 5))))
+            if self.show_synced_column:
+                self.table_widget.setItem(row, 14, QTableWidgetItem(str(position['synced'])))
             
             
             # Заполнение столбца с PnL и настройка цвета фона
