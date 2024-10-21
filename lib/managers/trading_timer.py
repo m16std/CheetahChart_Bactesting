@@ -22,7 +22,6 @@ class TradingTimer(QThread):
             wait_seconds = (next_sync - now).total_seconds() + self.delay
             print(f"Waiting for {wait_seconds} seconds until the next sync.")
             time.sleep(max(0, wait_seconds))
-            print(now)
             self.update_chart_signal.emit()  # Отправляем сигнал на обновление графика
 
     def _get_next_sync_time(self, now):

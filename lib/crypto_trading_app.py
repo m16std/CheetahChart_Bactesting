@@ -593,7 +593,6 @@ class CryptoTradingApp(QWidget):
         self.plot(self.df, positions, balance, indicators)
 
     def on_calculation_complete_on_trade(self, positions, balance, indicators):
-        print(positions)
         self.canvas.ax1.clear()
         self.canvas.ax2.clear()
         self.canvas.ax3.clear()
@@ -604,8 +603,6 @@ class CryptoTradingApp(QWidget):
 
 
     def compare_positions(self, current_positions, previous_positions):
-        print(current_positions)
-        print(previous_positions)
         log = []
         """
         Синхронизирует изменения между таблицами позиций и записывает лог в файл.
@@ -616,6 +613,7 @@ class CryptoTradingApp(QWidget):
         :param log_file_path: Путь к файлу для записи логов
         :return: Обновленная таблица с синхронизацией
         """
+
             # Первый цикл: если нет предыдущей таблицы
         if not previous_positions:
             for pos in current_positions:
@@ -625,7 +623,7 @@ class CryptoTradingApp(QWidget):
         # Сравнение текущих и предыдущих позиций
         for current_pos in current_positions:
             matching_pos = next((p for p in previous_positions if p['posId'] == current_pos['posId']), None)
-            
+
             # Игнорируем не синхронизированные позиции из предыдущей таблицы
             if matching_pos and matching_pos['syncStatus'] == 'unsynced':
                 continue
@@ -633,7 +631,7 @@ class CryptoTradingApp(QWidget):
             # Обрабатываем изменения тейка, стопа, статуса
             if matching_pos:
                 changes = []
-
+                
                 if current_pos['tpTriggerPx'] != matching_pos['tpTriggerPx']:
                     changes.append('take profit changed')
 
@@ -646,21 +644,23 @@ class CryptoTradingApp(QWidget):
                 if changes:
                     try:
                         # Пытаемся синхронизировать с биржей
-                        self.api.sync_position(current_pos)
+                        #self.api.sync_position(current_pos)
                         current_pos['syncStatus'] = 'synced'
                         log.append(f"Position {current_pos['posId']} synced: {', '.join(changes)}")
                     except Exception as e:
                         current_pos['syncStatus'] = 'unsynced'
                         log.append(f"Error syncing position {current_pos['posId']}: {str(e)}")
+                else:
+                    current_pos['syncStatus'] = 'synced'
             else:
                 # Новая позиция
                 try:
-                    self.api.open_position(current_pos)
+                    #self.api.open_position(current_pos)
                     current_pos['syncStatus'] = 'synced'
                     log.append(f"New position {current_pos['posId']} opened")
                 except Exception as e:
                     current_pos['syncStatus'] = 'unsynced'
-                    log.append(f"Error opening new position {current_pos['posId']}: {str(e)}")
+                    log.append(f"Error op2ening new position {current_pos['posId']}: {str(e)}")
         
         print(log)
         return current_positions
@@ -782,7 +782,7 @@ class CryptoTradingApp(QWidget):
             patch_color = '#089981' if (balance['value'].iloc[i+step] - balance['value'].iloc[i]) > 0 else '#F23645'
             self.canvas.ax3.add_patch(plt.Rectangle(
                         (balance['ts'].iloc[i], min(balance['value'])),
-                        (balance['ts'].iloc[-1] - balance['ts'].iloc[0])/patch_count*0.98,
+                        (balance['ts'].iloc[-1] - balance['ts'].iloc[0])/patch_count*0.95,
                         abs((balance['value'].iloc[i+step] - balance['value'].iloc[i]) / balance['value'].iloc[i])/max_rise*(max(balance['value'])-min(balance['value'])),
                         color=patch_color, alpha=0.2
                     ))  
@@ -902,6 +902,7 @@ class CryptoTradingApp(QWidget):
             self.canvas.ax1.legend(loc='upper left')
 
     def plot_indicators(self, df, indicators):
+        flag_ax2 = False
         for column in indicators:
             if column in df.columns:
                 i = len(df) - 1
@@ -912,10 +913,12 @@ class CryptoTradingApp(QWidget):
                     self.canvas.ax1.plot(df.index, df[column], label=column, alpha=0.5)
                 else:
                     self.canvas.ax2.plot(df.index, df[column], label=column, alpha=0.5)
+                    flag_ax2 = True
             else:
                 print(f"Индикатор '{column}' отсутствует в DataFrame.")
 
-            self.canvas.ax2.legend(loc='upper right')
+            if flag_ax2:
+                self.canvas.ax2.legend(loc='upper right')
 
     def finalize_canvas(self):
 
@@ -936,7 +939,7 @@ class CryptoTradingApp(QWidget):
 # Внешние взаимодействия
 
     def open_positions_table(self):
-        positions_table = PositionsTable(self.positions, self.current_theme, self.show_synced_column)
+        positions_table = PositionsTable(self.positions, self.current_theme, self.is_trade)
         positions_table.exec_()
 
     def start_chart_updates(self):
@@ -992,7 +995,6 @@ class CryptoTradingApp(QWidget):
         self.timer = None
         self.is_trade = False
         
-
     def setup_logging(self, log_file='trading_log.txt'):
         logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(message)s')
         logger = logging.getLogger()
@@ -1003,9 +1005,6 @@ class CryptoTradingApp(QWidget):
 
     def log_message(self, message):
         logging.info(message)
-
-
-
 
     def update_trading(self):
         # Функция для загрузки данных и синхронизации с биржей
