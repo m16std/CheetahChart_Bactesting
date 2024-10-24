@@ -1,7 +1,7 @@
-from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel
+from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from PyQt5.QtGui import QPainter, QPixmap, QIcon
+from PyQt5.QtGui import QPainter, QPixmap, QIcon, QFont
 from PyQt5.QtCore import Qt, QSettings, QSize
 from pyqttoast import Toast, ToastPreset
 from PyQt5.QtSvg import QSvgRenderer
@@ -24,6 +24,7 @@ from lib.managers.trading_timer import TradingTimer
 from lib.api.okx_load_api import DataDownloadThread
 from lib.managers.file_manager import FileManager 
 from lib.managers.neural_network import AIManager
+from lib.managers.simple_timer import PriceTimer
 from lib.managers.mpl_canvas import MPlCanvas
 from lib.windows.log_window import LogWindow
 from lib.api.okx_trade_api import OKXApi
@@ -33,10 +34,12 @@ pd.options.mode.chained_assignment = None
 class CryptoTradingApp(QWidget):
     def __init__(self):
         super().__init__()
+        self.is_trade = False
+        self.positions = None
+        self.previous_price = '0.0'
         self.file_handler = FileManager(self)
         self.strategy_manager = StrategyManager()
         self.ai_manager = AIManager(self)
-        self.chart_updater = TradingTimer()
         self.coin_icon_api = CryptocompareApi()
         self.icon_dir = "resources/crypto_icons"
         self.initUI()       
@@ -46,8 +49,7 @@ class CryptoTradingApp(QWidget):
                     level=logging.INFO,
                     format='%(asctime)s - %(message)s')
         self.log_window = LogWindow()
-        self.is_trade = False
-        self.positions = None
+        self.setup_price_updates()
 
       
 # Инициализация окна
@@ -168,7 +170,7 @@ class CryptoTradingApp(QWidget):
         test_action = QAction('Протестировать на текущих данных', self)
         test_action.triggered.connect(self.run_strategy)
 
-        strat_submenu = strat_menu.addMenu("Запуск")
+        strat_submenu = strat_menu.addMenu("Запустить")
         strat_submenu.setIcon(self.recolor_svg_icon("resources/stopwatch.svg", icon_color))
         strat_submenu.addAction(dat_action)
         strat_submenu.addAction(oat_action)
@@ -177,12 +179,12 @@ class CryptoTradingApp(QWidget):
         strat_menu.addSeparator()
 
         upd_action = QAction('Запустить', self)
-        upd_action.triggered.connect(self.start_chart_updates)
+        upd_action.triggered.connect(self.start_price_updates)
 
         stop_upd_action = QAction('Остановить', self)
-        stop_upd_action.triggered.connect(self.stop_chart_updates)
+        stop_upd_action.triggered.connect(self.stop_price_updates)
         
-        upd_submenu = strat_menu.addMenu("Авто-обновление")
+        upd_submenu = strat_menu.addMenu("Обновление цены")
         upd_submenu.setIcon(self.recolor_svg_icon("resources/time-refresh.svg", icon_color))
         upd_submenu.addAction(upd_action)
         upd_submenu.addAction(stop_upd_action)
@@ -305,51 +307,49 @@ class CryptoTradingApp(QWidget):
 
     def get_inputs_layout(self):
         font_size = 10 
-
+        
         self.symbol_input = QComboBox(self)
-        self.symbol_input.setMinimumWidth(200)
-        self.symbol_input.setIconSize(QSize(40, 40))  # Устанавливаем размер иконки
-        self.symbol_input.setFixedHeight(40)  # Высота ComboBox
-        self.update_crypto_dropdown()
-
         font = self.symbol_input.font()
         font.setPointSize(font_size)
+        self.symbol_input.setMinimumWidth(200)
+        self.symbol_input.setIconSize(QSize(40, 40))
+        self.symbol_input.setMaximumHeight(25) 
+        self.update_crypto_dropdown()
         self.symbol_input.setFont(font)
+        self.symbol_input.currentIndexChanged.connect(self.update_price_symbol)
+
+        self.price_label = QLabel(f"<p style='color: grey; font-size: 7pt; margin: 0px; padding: 0px;'>рын.</p>"
+                f"<p style='font-size: 10pt; font-weight: bold; margin: 0px; padding: 0px;'>0.0</p>")
+        self.price_label.setAlignment(Qt.AlignLeft)
+        self.price_label.setMinimumWidth(70)
 
         self.interval_input = QComboBox(self)
         self.interval_input.addItems(['1m', '5m', '15m','30m', '1H', '4H', '12H','1D'])
-        self.interval_input.setFixedHeight(40)  # Высота ComboBox
-        
+        self.interval_input.setMaximumHeight(25) 
         self.interval_input.setCurrentIndex(2)
-
-        font = self.interval_input.font()
-        font.setPointSize(font_size)
         self.interval_input.setFont(font)
 
         self.limit_input = QSpinBox(self)
         self.limit_input.setRange(100, 100000)
         self.limit_input.setValue(1000)
         self.limit_input.setSingleStep(500)
-
-        font = self.limit_input.font()
-        font.setPointSize(font_size)
+        self.limit_input.setMaximumHeight(25) 
         self.limit_input.setFont(font)
-
-        self.bar = QProgressBar(self) 
-        self.bar.setGeometry(200, 100, 200, 30) 
-        self.bar.setValue(0) 
-        self.bar.setAlignment(Qt.AlignCenter) 
 
         self.strat_input = QComboBox(self)
         self.strat_input.addItems(self.strategy_manager.strategy_dict.keys())
-        font = self.strat_input.font()
-        font.setPointSize(font_size)
         self.strat_input.setFont(font)
-        self.strat_input.setFixedHeight(40) 
+        self.strat_input.setMaximumHeight(25) 
+
+        self.bar = QProgressBar(self) 
+        self.bar.setGeometry(200, 100, 200, 50) 
+        self.bar.setMaximumHeight(25) 
+        self.bar.setValue(0) 
+        self.bar.setAlignment(Qt.AlignCenter) 
 
         inputs_layout = QHBoxLayout()
-
         inputs_layout.addWidget(self.symbol_input)
+        inputs_layout.addWidget(self.price_label)
         inputs_layout.addWidget(self.interval_input)
         inputs_layout.addWidget(self.limit_input)
         inputs_layout.addWidget(self.strat_input)
@@ -357,6 +357,41 @@ class CryptoTradingApp(QWidget):
 
         return inputs_layout
     
+    def format_price(self, price):
+        """Форматирует цену в зависимости от её значения"""
+        if price >= 100000:
+            return f"{int(price)}"  # До единиц
+        elif price >= 10000:
+            return f"{price:.1f}"  # До десятых
+        elif price >= 1000:
+            return f"{price:.2f}"  # До сотых
+        elif price < 1:
+            return f"{price:.4g}"  # Первые 5 значащих цифр для маленьких чисел
+        else:
+            return f"{price:.2f}"  # Обычное отображение до сотых
+        
+    def update_price(self, new_price):
+        """Обновление цены на основе выбранной криптовалюты"""
+        if self.previous_price is not None:
+            if new_price > self.previous_price:
+                self.price_label.setStyleSheet("color: #089981; padding: 0px; margin: 0px;")
+            elif new_price < self.previous_price:
+                self.price_label.setStyleSheet("color: #F23645; padding: 0px; margin: 0px;")
+            else:
+                if self.current_theme == "light":
+                    self.price_label.setStyleSheet("color: black; padding: 0px; margin: 0px;")
+                else:
+                    self.price_label.setStyleSheet("color: white; padding: 0px; margin: 0px;")
+
+            self.previous_price = new_price
+            formatted_price = self.format_price(float(new_price))
+
+            display_text = (f"<p style='color: grey; font-size: 7pt; margin: 0px; padding: 0px;'>рын.</p>"
+                f"<p style='font-size: 10pt; font-weight: bold; margin: 0px; padding: 0px;'>{formatted_price}</p>")
+
+            self.price_label.setText(display_text)
+            self.price_label.repaint()
+
     def load_icon_from_file(self, crypto_name):
         """Загружает иконку из локальной директории, если она существует"""
         icon_path = os.path.join(self.icon_dir, f"{crypto_name}.png")
@@ -367,7 +402,7 @@ class CryptoTradingApp(QWidget):
     def load_crypto_list(self):
         """Загружает список популярных криптовалют и их иконки"""
         stablecoins = {'USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'PAX', 'GUSD', 'SUSD'}
-        coin_api = DataDownloadThread('', 0, 0, 0)
+        coin_api = DataDownloadThread('', 0, 0)
         coin_api.show_toast.connect(self.show_toast)
         data = coin_api.get_coins()
 
@@ -524,12 +559,12 @@ class CryptoTradingApp(QWidget):
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
         self.bar.setFormat("Загрузка")
-        run = True
 
-        self.thread = DataDownloadThread(symbol, interval, limit, run)
+        self.thread = DataDownloadThread(symbol, interval, limit)
         self.thread.progress_changed.connect(self.on_progress_changed) 
         self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
         self.thread.show_toast.connect(self.show_toast)
+        self.stop_price_updates()
         self.thread.start()  # Запускаем поток
 
     def download_and_save(self):
@@ -537,12 +572,12 @@ class CryptoTradingApp(QWidget):
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
         self.bar.setFormat("Загрузка")
-        run = False
     
-        self.thread = DataDownloadThread(symbol, interval, limit, run)
+        self.thread = DataDownloadThread(symbol, interval, limit)
         self.thread.progress_changed.connect(self.on_progress_changed)
         self.thread.data_downloaded.connect(self.on_data_downloaded_save_it)
         self.thread.show_toast.connect(self.show_toast)
+        self.stop_price_updates()
         self.thread.start()
 
     def download_and_draw(self):
@@ -550,12 +585,12 @@ class CryptoTradingApp(QWidget):
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
         self.bar.setFormat("Загрузка")
-        run = True
 
-        self.thread = DataDownloadThread(symbol, interval, limit, run)
+        self.thread = DataDownloadThread(symbol, interval, limit)
         self.thread.progress_changed.connect(self.on_progress_changed) 
         self.thread.data_downloaded.connect(self.on_data_downloaded_draw_it)
         self.thread.show_toast.connect(self.show_toast)
+        self.stop_price_updates()
         self.thread.start()  # Запускаем поток
 
     def on_progress_changed(self, value):
@@ -574,6 +609,7 @@ class CryptoTradingApp(QWidget):
         # Метод, который будет вызван после завершения скачивания
         self.df = data
         self.file_handler.save_candlesticks()
+        self.start_price_updates()
     
     def on_data_downloaded_draw_it(self, data):
         # Метод, который будет вызван после завершения скачивания
@@ -725,6 +761,7 @@ class CryptoTradingApp(QWidget):
         self.draw_canvas()
         self.bar.setValue(100)
         self.bar.setFormat("Готово")
+        self.start_price_updates()
 
     def plot_candles(self, df):
         percent5 = int(len(df) / 80)
@@ -974,28 +1011,25 @@ class CryptoTradingApp(QWidget):
             positions_table = PositionsTable(self.positions, self.current_theme, self.is_trade)
             positions_table.exec_()
 
-    def start_chart_updates(self):
-        """Запускает обновление графика в реальном времени."""
-        symbol = self.symbol_input.currentText()
-        interval = self.interval_input.currentText()
-        limit = self.limit_input.value()
-        self.bar.setFormat("Загрузка")
-        run = True
-        self.thread = DataDownloadThread(symbol, interval, limit, run)
-        self.thread.progress_changed.connect(self.on_progress_changed) 
-        self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
-        
+    def setup_price_updates(self):
+        self.price_updater = PriceTimer()
+        self.price_updater.new_price_signal.connect(self.update_price)
+        self.price_updater.set_refresh_interval(3)
+        self.price_updater.update_symbol(self.symbol_input.currentText())
+        self.start_price_updates()
 
-        self.chart_updater.update_chart_signal.connect(self.update_chart)
-        self.chart_updater.set_refresh_interval(self.refresh_interval)
-        self.chart_updater.start_updating()
+    def start_price_updates(self):
+        """Запускает обновление цены в реальном времени."""
+        self.price_updater.start_updating()
 
-    def stop_chart_updates(self):
-        """Останавливает обновление графика."""
-        print('Обновление графика приостановлено')
+    def update_price_symbol(self):
+        if self.price_updater:
+            self.price_updater.update_symbol(self.symbol_input.currentText())
 
-        self.chart_updater.stop_updating()
-        #QMessageBox.information(self, "График", "Обновление графика приостановлено")
+    def stop_price_updates(self):
+        """Останавливает обновление цены."""
+        self.price_updater.stop_updating()
+
 
     def update_chart(self):
         """Метод для обновления графика (вставить логику обновления графика)."""

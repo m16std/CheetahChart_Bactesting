@@ -14,21 +14,26 @@ class DataDownloadThread(QThread):
     def __init__(self, parent=None):
         super(DataDownloadThread, self).__init__(parent)
 
-    def __init__(self, symbol, interval, limit, run_or_save, parent=None):
+    def __init__(self, symbol, interval, limit, mode = 0, parent=None):
         super(DataDownloadThread, self).__init__(parent)
         self.symbol = symbol
         self.interval = interval
         self.limit = limit
-        self.run_or_save = run_or_save
+        self.mode = mode
 
     def run(self):
         # Запускаем метод скачивания данных с переданными параметрами
-        data = self.get_okx_ohlcv(self.symbol, self.interval, self.limit)
+        if self.mode == 0:
+            data = self.get_okx_ohlcv(self.symbol, self.interval, self.limit)
+            if len(data) == 1:
+                self.show_toast.emit(ToastPreset.ERROR, 'Ошибка загрузки цен. Скорее всего нет интернета или не отвечает апи okx.com',  f"{data[0]}")
+            else:
+                self.data_downloaded.emit(data)
 
-        if len(data) == 1:
-            self.show_toast.emit(ToastPreset.ERROR, 'Ошибка загрузки цен. Скорее всего нет интернета или не отвечает апи okx.com',  f"{data[0]}")
-        else:
-            self.data_downloaded.emit(data)
+        if self.mode == 1:
+            price = self.get_crypto_price(self.symbol)
+            self.data_downloaded.emit(price)
+        
 
         
     def get_okx_ohlcv(self, symbol, interval, limit):
@@ -80,3 +85,19 @@ class DataDownloadThread(QThread):
         except Exception as e:
             self.show_toast.emit(ToastPreset.ERROR, 'Ошибка загрузки иконок валют. Скорее всего нет интернета или не отвечает апи cryptocompare.com',  f"{e}")
             return []
+
+    def get_crypto_price(self, symbol):
+        """Функция для получения текущей цены криптовалюты с биржи"""
+        try:
+            # Пример запроса на OKX (или использовать другой API)
+            url = f"https://www.okx.com/api/v5/market/ticker?instId={symbol}"
+            response = requests.get(url)
+            data = response.json()
+
+            # Парсинг цены из ответа API
+            price = data['data'][0]['last'] if 'data' in response.json() else "N/A"
+            return price
+        except Exception as e:
+            print(f"Error fetching price: {e}")
+            return "N/A"
+        
