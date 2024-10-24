@@ -2,12 +2,12 @@ from PyQt5.QtGui import *  # type: ignore
 from PyQt5.QtCore import QThread, pyqtSignal # type: ignore
 import requests # type: ignore
 import pandas as pd # type: ignore
-
+from pyqttoast import Toast, ToastPreset
 
 class DataDownloadThread(QThread):
     # Сигнал завершения скачивания
     data_downloaded = pyqtSignal(object)
-    request_exception = pyqtSignal()
+    show_toast = pyqtSignal(object, object, object)
     # Сигнал обновления прогресс-бара
     progress_changed = pyqtSignal(int)
 
@@ -25,22 +25,21 @@ class DataDownloadThread(QThread):
         # Запускаем метод скачивания данных с переданными параметрами
         data = self.get_okx_ohlcv(self.symbol, self.interval, self.limit)
 
-        # После завершения сигнализируем об этом
-        if len(data) == 0:
-            self.request_exception.emit()
+        if len(data) == 1:
+            self.show_toast.emit(ToastPreset.ERROR, 'Ошибка загрузки цен. Скорее всего нет интернета или не отвечает апи okx.com',  f"{data[0]}")
         else:
             self.data_downloaded.emit(data)
 
         
     def get_okx_ohlcv(self, symbol, interval, limit):
-        url = f'https://www.okx.com/api/v5/market/candles'
-        params = {
-            'instId': symbol,
-            'bar': interval,
-            'limit': 300
-        }
-        data = []
         try:
+            url = f'https://www.okx.com/api/v5/market/candles'
+            params = {
+                'instId': symbol,
+                'bar': interval,
+                'limit': 300
+            }
+            data = []
             response = requests.get(url, params=params)
             response = response.json()['data']
             data.extend(response)
@@ -56,9 +55,9 @@ class DataDownloadThread(QThread):
                 response = requests.get(url, params=params)
                 response = response.json()['data']
                 data.extend(response)
-        except requests.exceptions.RequestException as err:
-            print(f"Error: {err}")
-            return []
+
+        except Exception as e:
+            return [e]
         
         self.progress_changed.emit(100) 
         data = data[::-1]
@@ -78,6 +77,6 @@ class DataDownloadThread(QThread):
             response = requests.get(url)
             data = response.json()
             return data
-        except requests.exceptions.RequestException as err:
-            print(f"Error: {err}")
+        except Exception as e:
+            self.show_toast.emit(ToastPreset.ERROR, 'Ошибка загрузки иконок валют. Скорее всего нет интернета или не отвечает апи cryptocompare.com',  f"{e}")
             return []

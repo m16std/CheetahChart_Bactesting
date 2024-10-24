@@ -82,8 +82,7 @@ class CryptoTradingApp(QWidget):
         # Создаем canvas и добавляем в layout
         self.canvas = MPlCanvas(facecolor='#151924', textcolor = 'white')
         self.layout.addWidget(self.canvas)
-
-        
+     
         # Загружаем тему
         self.current_theme = self.load_theme() 
         self.apply_theme()
@@ -102,6 +101,12 @@ class CryptoTradingApp(QWidget):
         self.canvas.updateGeometry()
         self.show()
 
+    def add_toolbar(self):
+        self.layout.addWidget(self.toolbar)
+
+    def del_toolbar(self):
+        self.toolbar.setParent(None)
+        
     def get_menubar(self):
 
         if self.current_theme == "dark":
@@ -125,17 +130,16 @@ class CryptoTradingApp(QWidget):
         """)
 
         icon_label = QLabel(self)
-        pixmap = QPixmap("resources/cheetoslogo.svg")  # Замените на путь к вашей иконке
-        scaled_pixmap = pixmap.scaled(QSize(48, 24))  # Увеличиваем иконку до 48x48
+        pixmap = QPixmap("resources/cheetoslogo.svg")  
+        scaled_pixmap = pixmap.scaled(QSize(48, 24)) 
         icon_label.setPixmap(scaled_pixmap)
-        icon_label.setFixedSize(48, 24)  # Устанавливаем размер QLabel с иконкой
+        icon_label.setFixedSize(48, 24) 
 
         # Добавляем иконку в menubar слева
         menubar.setCornerWidget(icon_label, Qt.TopLeftCorner)
 
         file_menu = QMenu(' Файл ', self)
         menubar.addMenu(file_menu)
-
 
         draw_action = QAction("Открыть", self)
         draw_action.triggered.connect(self.open_and_draw)
@@ -255,6 +259,16 @@ class CryptoTradingApp(QWidget):
         toggle_theme_action.setIcon(self.recolor_svg_icon("resources/theme.svg", icon_color))
         theme_menu.addAction(toggle_theme_action)
 
+        add_tb_action = QAction('Открыть тулбар', self)
+        add_tb_action.triggered.connect(self.add_toolbar)
+        add_tb_action.setIcon(self.recolor_svg_icon("resources/theme.svg", icon_color))
+        theme_menu.addAction(add_tb_action)
+
+        del_tb_action = QAction('Скрыть тулбар', self)
+        del_tb_action.triggered.connect(self.del_toolbar)
+        del_tb_action.setIcon(self.recolor_svg_icon("resources/theme.svg", icon_color))
+        theme_menu.addAction(del_tb_action)
+
         settings_menu = QMenu(' Правка ', self)
         menubar.addMenu(settings_menu)
 
@@ -262,6 +276,14 @@ class CryptoTradingApp(QWidget):
         settings_action.triggered.connect(self.open_settings_dialog)
         settings_action.setIcon(self.recolor_svg_icon("resources/settings2.svg", icon_color))
         settings_menu.addAction(settings_action)
+
+        crypto_list_update_action = QAction('Перезагрузить список криптовалют', self)
+        crypto_list_update_action.triggered.connect(self.update_crypto_dropdown)
+        crypto_list_update_action.setIcon(self.recolor_svg_icon("resources/settings2.svg", icon_color))
+        settings_menu.addAction(crypto_list_update_action)
+
+
+        
 
         help_menu = QMenu(' Справка ', self)
         menubar.addMenu(help_menu)
@@ -284,8 +306,6 @@ class CryptoTradingApp(QWidget):
     def get_inputs_layout(self):
         font_size = 10 
 
-        #self.symbol_input = QComboBox(self)
-        #self.symbol_input.addItems(['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'PEPE-USDT', 'TON-USDT', 'BNB-USDT'])
         self.symbol_input = QComboBox(self)
         self.symbol_input.setMinimumWidth(200)
         self.symbol_input.setIconSize(QSize(40, 40))  # Устанавливаем размер иконки
@@ -327,8 +347,6 @@ class CryptoTradingApp(QWidget):
         self.strat_input.setFont(font)
         self.strat_input.setFixedHeight(40) 
 
-
-
         inputs_layout = QHBoxLayout()
 
         inputs_layout.addWidget(self.symbol_input)
@@ -350,6 +368,7 @@ class CryptoTradingApp(QWidget):
         """Загружает список популярных криптовалют и их иконки"""
         stablecoins = {'USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'PAX', 'GUSD', 'SUSD'}
         coin_api = DataDownloadThread('', 0, 0, 0)
+        coin_api.show_toast.connect(self.show_toast)
         data = coin_api.get_coins()
 
         crypto_list = []
@@ -357,7 +376,6 @@ class CryptoTradingApp(QWidget):
                 symbol = coin['CoinInfo']['Name']
                 if symbol not in stablecoins:
                     crypto_name = coin['CoinInfo']['Name']
-                    
 
                     # Попытка загрузить иконку из файла
                     pixmap = self.load_icon_from_file(crypto_name)
@@ -372,18 +390,22 @@ class CryptoTradingApp(QWidget):
     
     def update_crypto_dropdown(self):
         """Обновляет выпадающий список криптовалют"""
-        crypto_list = self.load_crypto_list()
+        try:
+            crypto_list = self.load_crypto_list()
 
-        # Очищаем выпадающий список перед обновлением
-        self.symbol_input.clear()
+            # Очищаем выпадающий список перед обновлением
+            self.symbol_input.clear()
 
-        # Добавляем новые элементы в выпадающий список
-        for crypto_name, pixmap in crypto_list:
-            if pixmap is not None and not pixmap.isNull():
-                self.symbol_input.addItem(QIcon(pixmap), str(crypto_name+'-USDT'))
-            else:
-                # Если иконка не найдена, используем дефолтную иконку
-                self.symbol_input.addItem(QIcon("resources/crypto_icons/default.png"), crypto_name)
+            # Добавляем новые элементы в выпадающий список
+            for crypto_name, pixmap in crypto_list:
+                if pixmap is not None and not pixmap.isNull():
+                    self.symbol_input.addItem(QIcon(pixmap), str(crypto_name+'-USDT'))
+                else:
+                    # Если иконка не найдена, используем дефолтную иконку
+                    self.symbol_input.addItem(QIcon("resources/crypto_icons/default.png"), crypto_name)
+
+        except Exception as e:
+            self.show_toast(ToastPreset.ERROR, 'Ошибка загрузки иконок валют. Скорее всего нет интернета или не отвечает апи cryptocompare.com',  f"{e}")
 
     def create_vertical_separator(self):
         # Создаем QFrame для вертикального разделителя
@@ -402,7 +424,6 @@ class CryptoTradingApp(QWidget):
         self.thread.run('', [], 0, 0, 0, 0, 0, 0, mode="export") 
         
     def import_strategy(self):
-    
         self.thread = StrategyManager()    
         self.thread.import_complete.connect(self.add_strategy)
         self.thread.create_toast.connect(self.show_toast)
@@ -441,7 +462,7 @@ class CryptoTradingApp(QWidget):
         self.position_type = self.settings.value("position_type", "percent")
         self.position_size = float(self.settings.value("position_size", "100"))
         self.refresh_interval = int(self.settings.value("refresh_interval", "10"))
-        self.show_toast('Загружены настройки!',  f"Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, Размер позиции: {self.position_size}, Тип: {self.position_type}, Частота обновления: {self.refresh_interval}")
+        #self.show_toast(ToastPreset.SUCCESS, 'Загружены настройки!',  f"Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, Размер позиции: {self.position_size}, Тип: {self.position_type}, Частота обновления: {self.refresh_interval}")
 
 # Тема приложения
 
@@ -508,6 +529,7 @@ class CryptoTradingApp(QWidget):
         self.thread = DataDownloadThread(symbol, interval, limit, run)
         self.thread.progress_changed.connect(self.on_progress_changed) 
         self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
+        self.thread.show_toast.connect(self.show_toast)
         self.thread.start()  # Запускаем поток
 
     def download_and_save(self):
@@ -520,6 +542,7 @@ class CryptoTradingApp(QWidget):
         self.thread = DataDownloadThread(symbol, interval, limit, run)
         self.thread.progress_changed.connect(self.on_progress_changed)
         self.thread.data_downloaded.connect(self.on_data_downloaded_save_it)
+        self.thread.show_toast.connect(self.show_toast)
         self.thread.start()
 
     def download_and_draw(self):
@@ -532,6 +555,7 @@ class CryptoTradingApp(QWidget):
         self.thread = DataDownloadThread(symbol, interval, limit, run)
         self.thread.progress_changed.connect(self.on_progress_changed) 
         self.thread.data_downloaded.connect(self.on_data_downloaded_draw_it)
+        self.thread.show_toast.connect(self.show_toast)
         self.thread.start()  # Запускаем поток
 
     def on_progress_changed(self, value):
@@ -601,7 +625,6 @@ class CryptoTradingApp(QWidget):
         self.thread.calculation_complete.disconnect(self.on_calculation_complete_on_trade)
         self.plot(self.df, positions, balance, indicators)
 
-
     def compare_positions(self, current_positions, previous_positions):
         log = []
         """
@@ -646,21 +669,30 @@ class CryptoTradingApp(QWidget):
                         # Пытаемся синхронизировать с биржей
                         #self.api.sync_position(current_pos)
                         current_pos['syncStatus'] = 'synced'
-                        log.append(f"Position {current_pos['posId']} synced: {', '.join(changes)}")
+                        message = f"Position {current_pos['posId']} synced: {', '.join(changes)}"
+                        self.log_message(message)
+                        self.log_window.update_log(message)
                     except Exception as e:
                         current_pos['syncStatus'] = 'unsynced'
-                        log.append(f"Error syncing position {current_pos['posId']}: {str(e)}")
+                        message = f"Error syncing position {current_pos['posId']}: {str(e)}"
+                        self.log_message(message)
+                        self.log_window.update_log(message)
                 else:
                     current_pos['syncStatus'] = 'synced'
             else:
-                # Новая позиция
-                try:
-                    #self.api.open_position(current_pos)
-                    current_pos['syncStatus'] = 'synced'
-                    log.append(f"New position {current_pos['posId']} opened")
-                except Exception as e:
-                    current_pos['syncStatus'] = 'unsynced'
-                    log.append(f"Error op2ening new position {current_pos['posId']}: {str(e)}")
+                if current_pos['status'] == 'open':
+                    # Новая позиция
+                    try:
+                        #self.api.open_position(current_pos)
+                        current_pos['syncStatus'] = 'synced'
+                        message = f"New position {current_pos['posId']} opened"
+                        self.log_message(message)
+                        self.log_window.update_log(message)
+                    except Exception as e:
+                        current_pos['syncStatus'] = 'unsynced'
+                        message = f"Error opening new position {current_pos['posId']}: {str(e)}"
+                        self.log_message(message)
+                        self.log_window.update_log(message)
         
         print(log)
         return current_positions
@@ -680,7 +712,7 @@ class CryptoTradingApp(QWidget):
         if len(positions) > 0:
             # Рисуем сделки
             self.plot_trades(positions)
-            self.bar.setValue(75)
+            self.bar.setValue(90)
             # Рисуем баланс
             self.plot_balance(balance)
             # Получаем статистику
@@ -693,6 +725,44 @@ class CryptoTradingApp(QWidget):
         self.draw_canvas()
         self.bar.setValue(100)
         self.bar.setFormat("Готово")
+
+    def plot_candles(self, df):
+        percent5 = int(len(df) / 80)
+        index = 0 
+        label_added = False
+        candlestick_data = zip(mdates.date2num(df.index.to_pydatetime()), df['open'], df['high'], df['low'], df['close'])
+
+        for date, open, high, low, close in candlestick_data:
+            if index % percent5 == 0:
+                self.bar.setValue(int(index / len(df) * 80))
+            index += 1
+            color = '#089981' if close >= open else '#F23645'
+            if not label_added:
+                self.canvas.ax1.plot([date, date], [open, close], color=color, label = str(self.symbol_input.currentText()+' OKX'), linewidth=2)
+                label_added = True
+            else:
+                self.canvas.ax1.plot([date, date], [open, close], color=color, linewidth=2)
+            self.canvas.ax1.plot([date, date], [low, high], color=color, linewidth=0.8)
+            self.canvas.ax1.legend(loc='upper left')
+
+    def plot_indicators(self, df, indicators):
+        flag_ax2 = False
+        for column in indicators:
+            if column in df.columns:
+                i = len(df) - 1
+                while i > 0 and math.isnan(df[column].iloc[i]):
+                    i -= 1
+                # проверка на то нужно ли рисовать индикатор на одном графике с ценой
+                if df[column].iloc[i] > df['close'].iloc[i] * 0.7 and df[column].iloc[i] < df['close'].iloc[i] * 1.3: 
+                    self.canvas.ax1.plot(df.index, df[column], label=column, alpha=0.5)
+                else:
+                    self.canvas.ax2.plot(df.index, df[column], label=column, alpha=0.5)
+                    flag_ax2 = True
+            else:
+                print(f"Индикатор '{column}' отсутствует в DataFrame.")
+
+            if flag_ax2:
+                self.canvas.ax2.legend(loc='upper right')
 
     def plot_statistics(self):
 
@@ -788,7 +858,6 @@ class CryptoTradingApp(QWidget):
                     ))  
             
         self.canvas.ax3.legend(loc='upper left')
-        self.bar.setValue(75)
 
     def get_statistic(self, balance, positions):
         # Рассчет максимальной просадки 
@@ -882,44 +951,6 @@ class CryptoTradingApp(QWidget):
                         color=color, alpha=0.1
                     ))
 
-    def plot_candles(self, df):
-        percent5 = int(len(df) / 50)
-        index = 0 
-        label_added = False
-        candlestick_data = zip(mdates.date2num(df.index.to_pydatetime()), df['open'], df['high'], df['low'], df['close'])
-
-        for date, open, high, low, close in candlestick_data:
-            if index % percent5 == 0:
-                self.bar.setValue(int(index / len(df) * 50))
-            index += 1
-            color = '#089981' if close >= open else '#F23645'
-            if not label_added:
-                self.canvas.ax1.plot([date, date], [open, close], color=color, label = str(self.symbol_input.currentText()+' OKX'), linewidth=2)
-                label_added = True
-            else:
-                self.canvas.ax1.plot([date, date], [open, close], color=color, linewidth=2)
-            self.canvas.ax1.plot([date, date], [low, high], color=color, linewidth=0.8)
-            self.canvas.ax1.legend(loc='upper left')
-
-    def plot_indicators(self, df, indicators):
-        flag_ax2 = False
-        for column in indicators:
-            if column in df.columns:
-                i = len(df) - 1
-                while i > 0 and math.isnan(df[column].iloc[i]):
-                    i -= 1
-                # проверка на то нужно ли рисовать индикатор на одном графике с ценой
-                if df[column].iloc[i] > df['close'].iloc[i] * 0.7 and df[column].iloc[i] < df['close'].iloc[i] * 1.3: 
-                    self.canvas.ax1.plot(df.index, df[column], label=column, alpha=0.5)
-                else:
-                    self.canvas.ax2.plot(df.index, df[column], label=column, alpha=0.5)
-                    flag_ax2 = True
-            else:
-                print(f"Индикатор '{column}' отсутствует в DataFrame.")
-
-            if flag_ax2:
-                self.canvas.ax2.legend(loc='upper right')
-
     def finalize_canvas(self):
 
         # Линии на фоне
@@ -939,8 +970,9 @@ class CryptoTradingApp(QWidget):
 # Внешние взаимодействия
 
     def open_positions_table(self):
-        positions_table = PositionsTable(self.positions, self.current_theme, self.is_trade)
-        positions_table.exec_()
+        if self.positions: 
+            positions_table = PositionsTable(self.positions, self.current_theme, self.is_trade)
+            positions_table.exec_()
 
     def start_chart_updates(self):
         """Запускает обновление графика в реальном времени."""
@@ -970,12 +1002,12 @@ class CryptoTradingApp(QWidget):
         self.bar.setFormat("Загрузка")
         self.thread.start() 
 
-    def show_toast(self, title, text):
+    def show_toast(self, preset, title, text):
         toast = Toast(self)
-        toast.setDuration(5000)  # Hide after 5 seconds
+        toast.setDuration(7000)  # Hide after 5 seconds
         toast.setTitle(title)
         toast.setText(text)
-        toast.applyPreset(ToastPreset.SUCCESS)  # Apply style preset
+        toast.applyPreset(preset)  # Apply style preset
         toast.show()
 
 

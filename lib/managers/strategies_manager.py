@@ -1,12 +1,13 @@
-from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PyQt5.QtCore import QThread, pyqtSignal
+from pyqttoast import ToastPreset
 from PyQt5.QtGui import *
 import importlib.util
 import pandas as pd
 import numpy as np
 import textwrap
+import hashlib
 import inspect
-import time
 import os
 import ta
 
@@ -15,7 +16,7 @@ class StrategyManager(QThread):
     calculation_complete = pyqtSignal(object, object, object)
     progress_changed = pyqtSignal(int)
     import_complete = pyqtSignal(object, object)
-    create_toast = pyqtSignal(object, object)
+    create_toast = pyqtSignal(object, object, object)
     update_chart_signal = pyqtSignal()
     load_external_strategies_complete = pyqtSignal(object)
  
@@ -49,7 +50,7 @@ class StrategyManager(QThread):
 
         self.positions = []  # Список сделок
         self.balance = []  # Хронология баланса
-        self.posId_counter = 1  # Для генерации уникальных ID сделок
+        self.posId_prev = 1  # Для генерации уникальных ID сделок
         self.current_balance = 0
 
     def run(self, mode="run"):
@@ -96,9 +97,17 @@ class StrategyManager(QThread):
         :return: posId — уникальный ID позиции
         """
         # Генерация уникального ID сделки
-        posId = self.posId_counter
-        self.posId_counter += 1
+        timestamp_str = str(timestamp)
         
+        # Создаем строку из всех входных значений
+        input_data = f"{timestamp_str}_{posSide}_{openPrice}"
+
+        # Генерируем хэш от строки с использованием SHA-256
+        hash_object = hashlib.sha256(input_data.encode())
+        
+        # Преобразуем результат хэширования в целое число
+        posId = int(hash_object.hexdigest(), 16) % (10**10) 
+
         # Сохранение сделки в список сделок
         position = {
             'posId': posId,
@@ -276,7 +285,7 @@ class StrategyManager(QThread):
                 if strategy_function:
                     strategy_function = strategy_function.__get__(self, self.__class__)
                     self.strategy_dict[module_name] = strategy_function
-                    self.create_toast.emit("Стратегия добавлена", f"Стратегия {name} загружена из внешней папки")
+                    self.create_toast.emit(ToastPreset.SUCCESS, "Стратегия добавлена", f"Стратегия {name} загружена из внешней папки")
 
             except Exception as e:
                 print(f'Ошибка загрузки стратегии "{module_name}": {str(e)}')
