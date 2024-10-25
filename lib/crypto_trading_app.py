@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from PyQt5.QtGui import QPainter, QPixmap, QIcon, QFont
+from PyQt5.QtGui import QPainter, QPixmap, QIcon
 from PyQt5.QtCore import Qt, QSettings, QSize
 from pyqttoast import Toast, ToastPreset
 from PyQt5.QtSvg import QSvgRenderer
@@ -24,7 +24,7 @@ from lib.managers.trading_timer import TradingTimer
 from lib.api.okx_load_api import DataDownloadThread
 from lib.managers.file_manager import FileManager 
 from lib.managers.neural_network import AIManager
-from lib.managers.simple_timer import PriceTimer
+from lib.managers.price_timer import PriceTimer
 from lib.managers.mpl_canvas import MPlCanvas
 from lib.windows.log_window import LogWindow
 from lib.api.okx_trade_api import OKXApi
@@ -40,7 +40,6 @@ class CryptoTradingApp(QWidget):
         self.file_handler = FileManager(self)
         self.strategy_manager = StrategyManager()
         self.ai_manager = AIManager(self)
-        self.coin_icon_api = CryptocompareApi()
         self.icon_dir = "resources/crypto_icons"
         self.initUI()       
         self.load_external_strategies()
@@ -50,7 +49,6 @@ class CryptoTradingApp(QWidget):
                     format='%(asctime)s - %(message)s')
         self.log_window = LogWindow()
         self.setup_price_updates()
-
       
 # Инициализация окна
 
@@ -291,19 +289,6 @@ class CryptoTradingApp(QWidget):
         menubar.addMenu(help_menu)
 
         return menubar
-    
-    def recolor_svg_icon(self, svg_path, color):
-        renderer = QSvgRenderer(svg_path)
-        pixmap = QPixmap(32, 32)  # Размер иконки
-        pixmap.fill(Qt.transparent)
-        
-        painter = QPainter(pixmap)
-        renderer.render(painter)
-        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
-        painter.fillRect(pixmap.rect(), color)
-        painter.end()
-
-        return QIcon(pixmap)
 
     def get_inputs_layout(self):
         font_size = 10 
@@ -357,41 +342,6 @@ class CryptoTradingApp(QWidget):
 
         return inputs_layout
     
-    def format_price(self, price):
-        """Форматирует цену в зависимости от её значения"""
-        if price >= 100000:
-            return f"{int(price)}"  # До единиц
-        elif price >= 10000:
-            return f"{price:.1f}"  # До десятых
-        elif price >= 1000:
-            return f"{price:.2f}"  # До сотых
-        elif price < 1:
-            return f"{price:.4g}"  # Первые 5 значащих цифр для маленьких чисел
-        else:
-            return f"{price:.2f}"  # Обычное отображение до сотых
-        
-    def update_price(self, new_price):
-        """Обновление цены на основе выбранной криптовалюты"""
-        if self.previous_price is not None:
-            if new_price > self.previous_price:
-                self.price_label.setStyleSheet("color: #089981; padding: 0px; margin: 0px;")
-            elif new_price < self.previous_price:
-                self.price_label.setStyleSheet("color: #F23645; padding: 0px; margin: 0px;")
-            else:
-                if self.current_theme == "light":
-                    self.price_label.setStyleSheet("color: black; padding: 0px; margin: 0px;")
-                else:
-                    self.price_label.setStyleSheet("color: white; padding: 0px; margin: 0px;")
-
-            self.previous_price = new_price
-            formatted_price = self.format_price(float(new_price))
-
-            display_text = (f"<p style='color: grey; font-size: 7pt; margin: 0px; padding: 0px;'>рын.</p>"
-                f"<p style='font-size: 10pt; font-weight: bold; margin: 0px; padding: 0px;'>{formatted_price}</p>")
-
-            self.price_label.setText(display_text)
-            self.price_label.repaint()
-
     def load_icon_from_file(self, crypto_name):
         """Загружает иконку из локальной директории, если она существует"""
         icon_path = os.path.join(self.icon_dir, f"{crypto_name}.png")
@@ -402,9 +352,9 @@ class CryptoTradingApp(QWidget):
     def load_crypto_list(self):
         """Загружает список популярных криптовалют и их иконки"""
         stablecoins = {'USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'PAX', 'GUSD', 'SUSD'}
-        coin_api = DataDownloadThread('', 0, 0)
-        coin_api.show_toast.connect(self.show_toast)
-        data = coin_api.get_coins()
+        self.cryptocompare_api = CryptocompareApi()
+        self.cryptocompare_api.show_toast.connect(self.show_toast)
+        data = self.cryptocompare_api.get_coins()
 
         crypto_list = []
         for coin in data['Data']:
@@ -417,7 +367,7 @@ class CryptoTradingApp(QWidget):
                     
                     if pixmap is None:
                         # Если иконка не найдена, загружаем её с API
-                        pixmap = self.coin_icon_api.load_icon_from_url(coin, self.icon_dir)
+                        pixmap = self.cryptocompare_api.load_icon_from_url(coin, self.icon_dir)
 
                     crypto_list.append((crypto_name, pixmap))
 
@@ -441,6 +391,19 @@ class CryptoTradingApp(QWidget):
 
         except Exception as e:
             self.show_toast(ToastPreset.ERROR, 'Ошибка загрузки иконок валют. Скорее всего нет интернета или не отвечает апи cryptocompare.com',  f"{e}")
+
+    def recolor_svg_icon(self, svg_path, color):
+        renderer = QSvgRenderer(svg_path)
+        pixmap = QPixmap(32, 32)  # Размер иконки
+        pixmap.fill(Qt.transparent)
+        
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(pixmap.rect(), color)
+        painter.end()
+
+        return QIcon(pixmap)
 
     def create_vertical_separator(self):
         # Создаем QFrame для вертикального разделителя
@@ -743,11 +706,11 @@ class CryptoTradingApp(QWidget):
             self.plot_indicators(df, indicators)
             # Рисуем свечи            
             self.plot_candles(df)
+            # Рисуем сделки
+            self.plot_trades(positions)
             
 
         if len(positions) > 0:
-            # Рисуем сделки
-            self.plot_trades(positions)
             self.bar.setValue(90)
             # Рисуем баланс
             self.plot_balance(balance)
@@ -1014,7 +977,7 @@ class CryptoTradingApp(QWidget):
     def setup_price_updates(self):
         self.price_updater = PriceTimer()
         self.price_updater.new_price_signal.connect(self.update_price)
-        self.price_updater.set_refresh_interval(3)
+        self.price_updater.set_refresh_interval(1)
         self.price_updater.update_symbol(self.symbol_input.currentText())
         self.start_price_updates()
 
@@ -1030,11 +993,26 @@ class CryptoTradingApp(QWidget):
         """Останавливает обновление цены."""
         self.price_updater.stop_updating()
 
+    def update_price(self, new_price):
+        """Обновление цены на основе выбранной криптовалюты"""
+        if self.previous_price is not None:
+            if new_price > self.previous_price:
+                self.price_label.setStyleSheet("color: #089981; padding: 0px; margin: 0px;")
+            elif new_price < self.previous_price:
+                self.price_label.setStyleSheet("color: #F23645; padding: 0px; margin: 0px;")
+            else:
+                if self.current_theme == "light":
+                    self.price_label.setStyleSheet("color: black; padding: 0px; margin: 0px;")
+                else:
+                    self.price_label.setStyleSheet("color: white; padding: 0px; margin: 0px;")
 
-    def update_chart(self):
-        """Метод для обновления графика (вставить логику обновления графика)."""
-        self.bar.setFormat("Загрузка")
-        self.thread.start() 
+            self.previous_price = new_price
+
+            display_text = (f"<p style='color: grey; font-size: 7pt; margin: 0px; padding: 0px;'>рын.</p>"
+                f"<p style='font-size: 10pt; font-weight: bold; margin: 0px; padding: 0px;'>{new_price}</p>")
+
+            self.price_label.setText(display_text)
+            self.price_label.repaint()
 
     def show_toast(self, preset, title, text):
         toast = Toast(self)
@@ -1043,7 +1021,6 @@ class CryptoTradingApp(QWidget):
         toast.setText(text)
         toast.applyPreset(preset)  # Apply style preset
         toast.show()
-
 
 ############
 

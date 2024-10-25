@@ -75,17 +75,6 @@ class DataDownloadThread(QThread):
 
         return data
 
-    def get_coins(self):
-        """Загружает список популярных криптовалют и их иконки"""
-        try:
-            url = "https://min-api.cryptocompare.com/data/top/mktcapfull?limit=20&tsym=USD"
-            response = requests.get(url)
-            data = response.json()
-            return data
-        except Exception as e:
-            self.show_toast.emit(ToastPreset.ERROR, 'Ошибка загрузки иконок валют. Скорее всего нет интернета или не отвечает апи cryptocompare.com',  f"{e}")
-            return []
-
     def get_crypto_price(self, symbol):
         """Функция для получения текущей цены криптовалюты с биржи"""
         try:
@@ -98,6 +87,6 @@ class DataDownloadThread(QThread):
             price = data['data'][0]['last'] if 'data' in response.json() else "N/A"
             return price
         except Exception as e:
-            print(f"Error fetching price: {e}")
+            self.show_toast.emit(ToastPreset.ERROR, 'Ошибка загрузки цены валюты. Скорее всего нет интернета или не отвечает апи cryptocompare.com',  f"{e}")
             return "N/A"
         
