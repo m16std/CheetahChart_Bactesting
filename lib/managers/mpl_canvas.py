@@ -1,20 +1,33 @@
-import matplotlib # type: ignore
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt # type: ignore
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas # type: ignore
-
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.widgets import MultiCursor 
+import numpy as np 
+import matplotlib.style as mplstyle
+mplstyle.use('fast')
 
 class MPlCanvas(FigureCanvas):
 
     def __init__(self, facecolor, textcolor):
         self.fig, (self.ax1, self.ax3) = plt.subplots(2, 1, figsize=(18, 10), sharex=True, gridspec_kw={'height_ratios': [2, 1]}, facecolor=facecolor)
-
+        
         # Вызов конструктора базового класса FigureCanvas
         super(MPlCanvas, self).__init__(self.fig)
 
         self.ax2 = self.ax1.twinx()
         self.ax4 = self.ax1.twinx()
         self.init_canvas(facecolor, textcolor)  # Инициализация настроек canvas
+
+        self.ax1.yaxis.tick_right()
+        self.ax1.yaxis.set_label_position("right")
+        self.ax2.yaxis.tick_left()
+        self.ax2.yaxis.set_label_position("left")
+        self.ax3.yaxis.tick_right()
+        self.ax3.yaxis.set_label_position("right")
+        self.ax4.yaxis.tick_left()
+        self.ax4.yaxis.set_label_position("left")
+
 
     def init_canvas(self, facecolor, textcolor):
         """Метод для инициализации или обновления цветов"""
@@ -35,10 +48,10 @@ class MPlCanvas(FigureCanvas):
         for tick in self.ax3.get_yticklabels():
             tick.set_color(textcolor)
 
-        plt.subplots_adjust(left=0.04, bottom=0.03, right=1, top=1, hspace=0.12)
+        plt.subplots_adjust(left=0, bottom=0.03, right=0.95, top=1, hspace=0.12)
 
         # Перерисовываем график
-        self.draw()
+        plt.draw()
 
     def update_colors(self, facecolor, textcolor):
         """Метод для обновления цветов и перерисовки"""

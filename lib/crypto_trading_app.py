@@ -1,13 +1,9 @@
 from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from PyQt5.QtGui import QPainter, QPixmap, QIcon
 from PyQt5.QtCore import Qt, QSettings, QSize
 from pyqttoast import Toast, ToastPreset
 from PyQt5.QtSvg import QSvgRenderer
-import matplotlib.dates as mdates
-import matplotlib.image as mpimg
-import matplotlib.pyplot as plt
+import pyqtgraph as pg
 import pandas as pd
 import numpy as np
 import qdarktheme
@@ -15,6 +11,7 @@ import datetime
 import logging
 import math
 import os
+
 
 from lib.managers.strategies_manager import StrategyManager
 from lib.windows.positions_window import PositionsTable
@@ -25,7 +22,7 @@ from lib.api.okx_load_api import DataDownloadThread
 from lib.managers.file_manager import FileManager 
 from lib.managers.neural_network import AIManager
 from lib.managers.price_timer import PriceTimer
-from lib.managers.mpl_canvas import MPlCanvas
+from lib.managers.pg_canvas import PGCanvas
 from lib.windows.log_window import LogWindow
 from lib.api.okx_trade_api import OKXApi
 
@@ -49,7 +46,9 @@ class CryptoTradingApp(QWidget):
                     format='%(asctime)s - %(message)s')
         self.log_window = LogWindow()
         self.setup_price_updates()
-      
+        
+
+
 # Инициализация окна
 
     def initUI(self):
@@ -66,22 +65,16 @@ class CryptoTradingApp(QWidget):
 
         self.layout = QVBoxLayout(self)
 
-
         # Создаем лейаут полей ввода и добавляем в layout
         inputs_layout = self.get_inputs_layout()
         self.layout.addLayout(inputs_layout)
 
-        self.stats = {'winrate': '0%', \
-            'profit': '0%', \
-            'trades': '0', \
-            'period': '0 days', \
-            'init': '0 USDT', \
-            'final': '0 USDT', \
-            'drawdown': '0%'}
+        
 
         # Создаем canvas и добавляем в layout
-        self.canvas = MPlCanvas(facecolor='#151924', textcolor = 'white')
-        self.layout.addWidget(self.canvas)
+        self.canvas = PGCanvas(facecolor='#151924', textcolor = 'white')
+        self.layout.addWidget(self.canvas.get_canvas())
+        self.canvas.add_cursor_line()
      
         # Загружаем тему
         self.current_theme = self.load_theme() 
@@ -91,16 +84,14 @@ class CryptoTradingApp(QWidget):
         self.layout.setContentsMargins(9, 9, 9, 9)
         self.layout.setMenuBar(self.menubar)
 
-        # Включаем масштабирование и перемещения графиков
-        self.toolbar = NavigationToolbar(self.canvas, self)
-        self.toolbar.zoom()
-        self.toolbar.pan()
-        self.toolbar.setParent(None)
-        #layout.addWidget(self.toolbar)
-
-        self.canvas.updateGeometry()
         self.show()
 
+    def crosshair(self, sel):
+        x = sel.target[0]
+        y1 = np.interp(x, self.plot1x, self.plot1y)
+        self.hline1.set_ydata([y1])
+        self.vline1.set_xdata([x])
+        
     def add_toolbar(self):
         self.layout.addWidget(self.toolbar)
 
@@ -316,7 +307,7 @@ class CryptoTradingApp(QWidget):
 
         self.limit_input = QSpinBox(self)
         self.limit_input.setRange(100, 100000)
-        self.limit_input.setValue(1000)
+        self.limit_input.setValue(500)
         self.limit_input.setSingleStep(500)
         self.limit_input.setMaximumHeight(25) 
         self.limit_input.setFont(font)
@@ -476,19 +467,19 @@ class CryptoTradingApp(QWidget):
                     }
                 }
             )
-            self.canvas.update_colors(facecolor='#151924', textcolor = 'white')
-            self.plot_statistics()
-            self.finalize_canvas()
-            self.draw_canvas()
+            #self.canvas.update_colors(facecolor='#151924', textcolor = 'white')
+            #self.plot_statistics()
+            #self.finalize_canvas()
+            #self.draw_canvas()
             self.menubar = self.get_menubar()
             self.layout.setMenuBar(self.menubar)
                 
         else:
             qdarktheme.setup_theme(self.current_theme)
-            self.canvas.update_colors(facecolor='#ffffff', textcolor = 'black')
-            self.plot_statistics()
-            self.finalize_canvas()
-            self.draw_canvas()
+            #self.canvas.update_colors(facecolor='#ffffff', textcolor = 'black')
+            #self.plot_statistics()
+            #self.finalize_canvas()
+            #self.draw_canvas()
             self.menubar = self.get_menubar()
             self.layout.setMenuBar(self.menubar)
 
@@ -512,9 +503,6 @@ class CryptoTradingApp(QWidget):
 
     def open_and_draw(self):
         if self.file_handler.load_candlesticks():
-            self.canvas.ax1.clear()
-            self.canvas.ax2.clear()
-            self.canvas.ax3.clear()
             self.plot(self.df, [], [], [])
 
     def download_and_run(self):
@@ -578,9 +566,6 @@ class CryptoTradingApp(QWidget):
         # Метод, который будет вызван после завершения скачивания
         self.df = data
         print(self.df)
-        self.canvas.ax1.clear()
-        self.canvas.ax2.clear()
-        self.canvas.ax3.clear()
         self.plot(self.df, [], [], [])
 
     def run_strategy(self):
@@ -607,18 +592,12 @@ class CryptoTradingApp(QWidget):
         self.thread.run() 
     
     def on_calculation_complete(self, positions, balance, indicators):
-        self.canvas.ax1.clear()
-        self.canvas.ax2.clear()
-        self.canvas.ax3.clear()
         self.positions = positions
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.calculation_complete.disconnect(self.on_calculation_complete)
         self.plot(self.df, positions, balance, indicators)
 
     def on_calculation_complete_on_trade(self, positions, balance, indicators):
-        self.canvas.ax1.clear()
-        self.canvas.ax2.clear()
-        self.canvas.ax3.clear()
         self.positions = self.compare_positions(positions, self.positions)
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.calculation_complete.disconnect(self.on_calculation_complete_on_trade)
@@ -698,6 +677,7 @@ class CryptoTradingApp(QWidget):
 
 # Отрисовка графиков
 
+    """
     def plot(self, df, positions, balance, indicators):
         self.bar.setFormat("Отрисовка")
 
@@ -725,7 +705,7 @@ class CryptoTradingApp(QWidget):
         self.bar.setValue(100)
         self.bar.setFormat("Готово")
         self.start_price_updates()
-
+        
     def plot_candles(self, df):
         percent5 = int(len(df) / 80)
         index = 0 
@@ -742,6 +722,7 @@ class CryptoTradingApp(QWidget):
                 label_added = True
             else:
                 self.canvas.ax1.plot([date, date], [open, close], color=color, linewidth=2)
+
             self.canvas.ax1.plot([date, date], [low, high], color=color, linewidth=0.8)
             self.canvas.ax1.legend(loc='upper left')
 
@@ -859,43 +840,7 @@ class CryptoTradingApp(QWidget):
             
         self.canvas.ax3.legend(loc='upper left')
 
-    def get_statistic(self, balance, positions):
-        # Рассчет максимальной просадки 
-        max_drawdown = 0
-        max_balance = 0
-        for i in range(0, len(balance['value'])):
-            if max_balance < balance['value'].iloc[i]:
-                max_balance = balance['value'].iloc[i]
-            if (max_balance - balance['value'].iloc[i]) * 100 / max_balance > max_drawdown:
-                max_drawdown = (max_balance - balance['value'].iloc[i]) * 100 / max_balance
-
-        # Рассчет профита, винрейта
-        wins = 0
-        losses = 0
-        winrate = 0
-        for position in positions:
-            if position['pnl'] > 0:
-                wins += 1
-            else:
-                losses += 1
-        if wins+losses == 0:
-            winrate = 0
-        else:
-            winrate = round(wins/(wins+losses)*100, ndigits=2)
-        profit = round((float(balance['value'].iloc[-1])-float(balance['value'].iloc[0]))/float(balance['value'].iloc[0])*100, ndigits=2)
-
-        # Статистика
-        period = balance['ts'].iloc[-1] - balance['ts'].iloc[0]
-        period_days = f"{period.days} days"
-        stats = {'winrate': str(winrate)+'%', \
-                'profit': str(profit)+'%', \
-                'trades': str(wins+losses), \
-                'period': period_days, \
-                'init': str(balance['value'].iloc[0])+' USDT', \
-                'final': str(round(balance['value'].iloc[-1], ndigits=1))+' USDT', \
-                'drawdown': str(round(max_drawdown, ndigits=1))+'%'}
-        
-        return stats
+    
 
     def plot_trades(self, positions):
         for position in positions:
@@ -964,8 +909,32 @@ class CryptoTradingApp(QWidget):
         self.canvas.ax1.xaxis.set_major_formatter(formatter)
 
     def draw_canvas(self):
+        #multi = MultiCursor(self.canvas.fig.canvas, (self.canvas.ax1, self.canvas.ax3), color='r', lw=2, horizOn=True, vertOn=True) 
+
         self.canvas.draw()
-        self.show()
+        #self.show()
+
+    """
+
+    def plot(self, df, positions, balance, indicators):
+        self.bar.setFormat("Отрисовка")
+
+        self.canvas.candlestick_plot.clear()
+        self.canvas.balance_plot.clear()
+
+        self.canvas.plot_candlestick(df)
+        self.canvas.plot_indicators(df, indicators)
+        self.canvas.plot_balance(balance)
+        self.canvas.plot_positions(positions, df)
+        self.canvas.get_statistic(balance, positions)
+        self.canvas.plot_statistic()
+
+
+        self.canvas.add_cursor_line()
+        
+        self.bar.setValue(100)
+        self.bar.setFormat("Готово")
+        self.start_price_updates()
 
 # Внешние взаимодействия
 
