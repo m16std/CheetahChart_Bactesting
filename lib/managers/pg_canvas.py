@@ -9,10 +9,6 @@ from PyQt5.QtCore import QMargins
 class PGCanvas(QWidget):
 
     def __init__(self, facecolor, textcolor):
-        # Настройка стилей
-        pg.setConfigOption('background', facecolor)
-        pg.setConfigOption('foreground', textcolor)
-        self.textcolor = textcolor
         self.price_date_axis = pg.DateAxisItem(orientation='bottom')
         self.balance_date_axis = pg.DateAxisItem(orientation='bottom')
 
@@ -54,12 +50,10 @@ class PGCanvas(QWidget):
         self.stats_layout.setSpacing(-15)
         self.values_layout.setSpacing(-15)
 
-        
-
-
         self.init_statistic()
 
-        self.init_canvas(facecolor, textcolor)  # Инициализация настроек canvas
+        # Настройка стилей
+        self.init_canvas(facecolor, textcolor)
 
         l = QtWidgets.QVBoxLayout()
         l.addWidget(self.candlestick_plot, stretch=3)
@@ -79,7 +73,27 @@ class PGCanvas(QWidget):
         return self.widget
 
     def init_canvas(self, facecolor, textcolor):
-        """Метод для инициализации или обновления цветов"""
+        pg.setConfigOption('background', facecolor)
+        pg.setConfigOption('foreground', textcolor)
+        self.textcolor = textcolor
+        self.facecolor = facecolor
+        self.candlestick_plot.setBackground(facecolor)
+        self.balance_plot.setBackground(facecolor)
+        
+        self.winrate_label.setStyleSheet(f"color: #089981; font: 12pt;")
+        self.profit_label.setStyleSheet(f"color: #089981; font: 12pt;")
+        self.trades_label.setStyleSheet(f"color: {self.textcolor}; font: 12pt;")
+        self.period_label.setStyleSheet(f"color: {self.textcolor}; font: 12pt;")
+        self.init_label.setStyleSheet(f"color: #089981; font: 12pt;")
+        self.final_label.setStyleSheet(f"color: #089981; font: 12pt;")
+        self.drawdown_label.setStyleSheet(f"color: #F23645; font: 12pt;")
+
+        self.data_label.setStyleSheet(f"color: {self.textcolor};")
+        self.price_label.setStyleSheet(f"color: {self.textcolor};")
+
+        for i, text in enumerate(self.stat_texts):
+            self.stats_layout.itemAt(i).widget().setStyleSheet(f"color: {self.textcolor};")
+        
 
     def update_colors(self, facecolor, textcolor):
         """Метод для обновления цветов и перерисовки"""
@@ -103,17 +117,14 @@ class PGCanvas(QWidget):
         for i, text in enumerate(self.stat_texts):
             label = QLabel(text)
             label.setAlignment(QtCore.Qt.AlignLeft)
-            label.setStyleSheet("color: white;")
             self.stats_layout.addWidget(label, 0, i)
 
         self.data_label = QLabel("Date: N/A")
         self.data_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.data_label.setStyleSheet("color: white;")
         self.stats_layout.addWidget(self.data_label, 0, 7)
 
         self.price_label = QLabel("Price: N/A")
         self.price_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.price_label.setStyleSheet("color: white;")
         self.values_layout.addWidget(self.price_label, 0, 7)
         
         self.winrate_label = QLabel(self.stats['winrate'])
@@ -130,13 +141,6 @@ class PGCanvas(QWidget):
         self.init_label.setAlignment(QtCore.Qt.AlignLeft)
         self.final_label.setAlignment(QtCore.Qt.AlignLeft)
         self.drawdown_label.setAlignment(QtCore.Qt.AlignLeft)
-        self.winrate_label.setStyleSheet(f"color: #089981; font: 12pt;")
-        self.profit_label.setStyleSheet(f"color: #089981; font: 12pt;")
-        self.trades_label.setStyleSheet(f"color: {self.textcolor}; font: 12pt;")
-        self.period_label.setStyleSheet(f"color: {self.textcolor}; font: 12pt;")
-        self.init_label.setStyleSheet(f"color: #089981; font: 12pt;")
-        self.final_label.setStyleSheet(f"color: #089981; font: 12pt;")
-        self.drawdown_label.setStyleSheet(f"color: #F23645; font: 12pt;")
         self.values_layout.addWidget(self.winrate_label, 0, 0)
         self.values_layout.addWidget(self.profit_label, 0, 1)
         self.values_layout.addWidget(self.trades_label, 0, 2)
@@ -145,14 +149,7 @@ class PGCanvas(QWidget):
         self.values_layout.addWidget(self.final_label, 0, 5)
         self.values_layout.addWidget(self.drawdown_label, 0, 6)
 
-    def plot_statistic(self):
-
-        for i, text in enumerate(self.stat_texts):
-            label = QLabel(text)
-            label.setAlignment(QtCore.Qt.AlignLeft)
-            label.setStyleSheet("color: white;")
-            self.stats_layout.addWidget(label, 0, i)
-        
+    def plot_statistic(self):        
         self.winrate_label.setText(self.stats['winrate'])
         self.profit_label.setText(self.stats['profit'])
         self.trades_label.setText(self.stats['trades'])
@@ -232,7 +229,7 @@ class PGCanvas(QWidget):
         level = (init - data['value'].min())/(data['value'].max() - data['value'].min())
         grad = QtGui.QLinearGradient(0, data['value'].min(), 0, data['value'].max())
         grad.setColorAt(0.0, pg.mkColor('#F23645'))
-        grad.setColorAt(level, pg.mkColor('#151924'))
+        grad.setColorAt(level, QColor(0, 0, 0, 0))
         grad.setColorAt(1, pg.mkColor('#089981'))
         brush = QtGui.QBrush(grad)
         self.balance_plot.plot(data['ts'].astype('int64') // 10**9, data['value'], fillLevel=init, brush=brush, pen=pen, name="Balance")
@@ -396,8 +393,8 @@ class PGCanvas(QWidget):
                 gradient.setColorAt(0, QColor(8, 153, 129, 100))
                 gradient.setColorAt(1, QColor(0, 0, 0, 0))
             else:
-                gradient.setColorAt(0, QColor(242, 54, 69, 100))
-                gradient.setColorAt(1, QColor(0, 0, 0, 0))
+                gradient.setColorAt(1, QColor(242, 54, 69, 100))
+                gradient.setColorAt(0, QColor(0, 0, 0, 0))
             rect_item = QGraphicsRectItem(start_time, bottom, end_time - start_time, top - bottom)
             rect_item.setBrush(QBrush(gradient))
             rect_item.setPen(mkPen(None))  # Без обводки

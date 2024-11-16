@@ -467,7 +467,7 @@ class CryptoTradingApp(QWidget):
                     }
                 }
             )
-            #self.canvas.update_colors(facecolor='#151924', textcolor = 'white')
+            self.canvas.update_colors(facecolor='#151924', textcolor = 'white')
             #self.plot_statistics()
             #self.finalize_canvas()
             #self.draw_canvas()
@@ -476,7 +476,7 @@ class CryptoTradingApp(QWidget):
                 
         else:
             qdarktheme.setup_theme(self.current_theme)
-            #self.canvas.update_colors(facecolor='#ffffff', textcolor = 'black')
+            self.canvas.update_colors(facecolor='#ffffff', textcolor = 'black')
             #self.plot_statistics()
             #self.finalize_canvas()
             #self.draw_canvas()
