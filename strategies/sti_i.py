@@ -6,7 +6,7 @@ def supertrend_strategy_imp(self, df, initial_balance, position_size, position_t
     df['Final Lowerband'] = sti['Final Lowerband']
     df['Final Upperband'] = sti['Final Upperband']
     df['Supertrend'] = sti['Supertrend']
-    indicators = ['Final Lowerband', 'Final Upperband']
+    self.indicators = ['Final Lowerband', 'Final Upperband']
 
     current_balance = qty = initial_balance
     if position_type == "percent":
@@ -34,4 +34,4 @@ def supertrend_strategy_imp(self, df, initial_balance, position_size, position_t
                 posId = self.open_position('short', 'market', 0, 0, df['close'].iloc[i], qty, df.index[i])
                 position_open = True
 
-    return indicators
+    return

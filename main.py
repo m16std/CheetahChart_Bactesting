@@ -1,15 +1,16 @@
 import sys
-from PyQt5.QtWidgets import  QApplication # type: ignore
+from PyQt5.QtWidgets import  QApplication, QVBoxLayout # type: ignore
 import qdarktheme # type: ignore
 from lib.crypto_trading_app import CryptoTradingApp
+import pyqtgraph as pg
 from os import environ
 
 def main():
     app = QApplication(sys.argv)
     qdarktheme.setup_theme("dark")  # Начальная тема
-    ex = CryptoTradingApp()
-    ex.show()
-    sys.exit(app.exec_())
+    widget = CryptoTradingApp()
+    widget.show()
+    app.exec_()
 
 def suppress_qt_warnings():
     environ["QT_DEVICE_PIXEL_RATIO"] = "0"
@@ -20,3 +21,5 @@ def suppress_qt_warnings():
 if __name__ == '__main__':
     suppress_qt_warnings()
     main()
+
+

@@ -1,8 +1,8 @@
-from PyQt5.QtGui import *  # type: ignore
-from PyQt5.QtCore import QThread, pyqtSignal # type: ignore
-import requests # type: ignore
-import pandas as pd # type: ignore
-from pyqttoast import Toast, ToastPreset
+from PyQt5.QtGui import * 
+from PyQt5.QtCore import QThread, pyqtSignal 
+import requests
+import pandas as pd
+from pyqttoast import ToastPreset
 
 class DataDownloadThread(QThread):
     # Сигнал завершения скачивания

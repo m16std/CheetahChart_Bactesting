@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QMessageBox, QSpinBox # type: ignore
 
-class SettingsDialog(QDialog):
+class SettingsWindow(QDialog):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings

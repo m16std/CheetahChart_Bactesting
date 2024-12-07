@@ -1,12 +1,90 @@
+from lib.api.okx_trade_api import OKXApi
+
 class TradingSyncManager:
-    def __init__(self, api, strategy_positions):
-        self.api = api
-        self.strategy_positions = strategy_positions
+    def __init__(self):
+        self.api = OKXApi(api_key='your_api_key', api_secret='your_api_secret', passphrase='your_passphrase')
         self.log = []
 
-    def sync_positions(self):
+        
+    def compare_positions(self, current_positions, previous_positions):
+        log = []
+        """
+        Синхронизирует изменения между таблицами позиций и записывает лог в файл.
+        
+        :param current_positions: DataFrame с текущими позициями
+        :param previous_positions: DataFrame с позициями с предыдущего цикла или None, если это первый цикл
+        :param exchange_api: Объект API для работы с биржей
+        :param log_file_path: Путь к файлу для записи логов
+        :return: Обновленная таблица с синхронизацией
+        """
+
+            # Первый цикл: если нет предыдущей таблицы
+        if not previous_positions:
+            for pos in current_positions:
+                pos['syncStatus'] = 'synced'  # Добавляем поле синхронизации
+            return current_positions
+        
+        # Сравнение текущих и предыдущих позиций
+        for current_pos in current_positions:
+            matching_pos = next((p for p in previous_positions if p['posId'] == current_pos['posId']), None)
+
+            # Игнорируем не синхронизированные позиции из предыдущей таблицы
+            if matching_pos and matching_pos['syncStatus'] == 'unsynced':
+                continue
+            
+            # Обрабатываем изменения тейка, стопа, статуса
+            if matching_pos:
+                changes = []
+
+                if current_pos['status'] != matching_pos['status']:
+                    changes.append(f"status changed to {current_pos['status']}")
+                
+                if current_pos['tpTriggerPx'] != matching_pos['tpTriggerPx']:
+                    changes.append('take profit changed')
+
+                if current_pos['slTriggerPx'] != matching_pos['slTriggerPx']:
+                    changes.append('stop loss changed')
+
+                
+
+                if changes:
+                    try:
+                        # Пытаемся синхронизировать с биржей
+                        #self.api.sync_position(current_pos)
+                        current_pos['syncStatus'] = 'synced'
+                        message = f"Position {current_pos['posId']} synced: {', '.join(changes)}"
+                        self.log_message(message)
+                        self.log_window.update_log(message)
+                    except Exception as e:
+                        current_pos['syncStatus'] = 'unsynced'
+                        message = f"Error syncing position {current_pos['posId']}: {str(e)}"
+                        self.log_message(message)
+                        self.log_window.update_log(message)
+                else:
+                    current_pos['syncStatus'] = 'synced'
+            else:
+                if current_pos['status'] == 'open':
+                    # Новая позиция
+                    try:
+                        #self.api.open_position(current_pos)
+                        current_pos['syncStatus'] = 'synced'
+                        message = f"New position {current_pos['posId']} opened"
+                        self.log_message(message)
+                        self.log_window.update_log(message)
+                    except Exception as e:
+                        current_pos['syncStatus'] = 'unsynced'
+                        message = f"Error opening new position {current_pos['posId']}: {str(e)}"
+                        self.log_message(message)
+                        self.log_window.update_log(message)
+        
+        print(log)
+        return current_positions
+
+
+    def sync_positions(self, positions):
         """ Синхронизация позиций из таблицы с биржей """
         # Получаем открытые позиции на бирже
+        self.strategy_positions = positions
         open_positions = self.api.fetch_positions()
 
         for pos in self.strategy_positions:

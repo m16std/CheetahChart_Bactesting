@@ -7,7 +7,6 @@ import time
 class TradingTimer(QThread):
     update_chart_signal = pyqtSignal()  # Сигнал для обновления графика
 
-
     def __init__(self, sync_interval=10, delay=0):
         super().__init__()
         self.running = False  # Флаг для контроля потока

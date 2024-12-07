@@ -3,7 +3,7 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtCore import Qt
 import qdarktheme
 
-class PositionsTable(QDialog):
+class PositionsWindow(QDialog):
     def __init__(self, positions, current_theme, show_synced_column=False):
         super().__init__()
         self.setWindowTitle('Positions')
