@@ -3,19 +3,18 @@ from PyQt5.QtGui import QPainter, QPixmap, QIcon
 from PyQt5.QtCore import Qt, QSettings, QSize
 from pyqttoast import Toast, ToastPreset
 from PyQt5.QtSvg import QSvgRenderer
-import pyqtgraph as pg
 import pandas as pd
 import numpy as np
 import qdarktheme
 import datetime
 import logging
-import math
 import os
 
 
 from lib.managers.strategies_manager import StrategyManager
-from lib.windows.positions_window import PositionsTable
-from lib.windows.settings_window import SettingsDialog
+from lib.managers.trading_sync_manager import TradingSyncManager
+from lib.windows.positions_window import PositionsWindow
+from lib.windows.settings_window import SettingsWindow
 from lib.api.cryptocompare_api import CryptocompareApi
 from lib.managers.trading_timer import TradingTimer
 from lib.api.okx_load_api import DataDownloadThread
@@ -36,18 +35,17 @@ class CryptoTradingApp(QWidget):
         self.previous_price = '0.0'
         self.file_handler = FileManager(self)
         self.strategy_manager = StrategyManager()
-        self.ai_manager = AIManager(self)
+        self.cryptocompare_api = CryptocompareApi()
+        self.trading_sync_manager = TradingSyncManager()
         self.icon_dir = "resources/crypto_icons"
         self.initUI()       
         self.load_external_strategies()
-        self.api = OKXApi(api_key='your_api_key', api_secret='your_api_secret', passphrase='your_passphrase')
+        
         logging.basicConfig(filename='trading_log.txt',
                     level=logging.INFO,
                     format='%(asctime)s - %(message)s')
         self.log_window = LogWindow()
         self.setup_price_updates()
-        
-
 
 # Инициализация окна
 
@@ -69,8 +67,6 @@ class CryptoTradingApp(QWidget):
         inputs_layout = self.get_inputs_layout()
         self.layout.addLayout(inputs_layout)
 
-        
-
         # Создаем canvas и добавляем в layout
         self.canvas = PGCanvas(facecolor='#151924', textcolor = 'white')
         self.layout.addWidget(self.canvas.get_canvas())
@@ -85,19 +81,8 @@ class CryptoTradingApp(QWidget):
         self.layout.setMenuBar(self.menubar)
 
         self.show()
-
-    def crosshair(self, sel):
-        x = sel.target[0]
-        y1 = np.interp(x, self.plot1x, self.plot1y)
-        self.hline1.set_ydata([y1])
-        self.vline1.set_xdata([x])
-        
-    def add_toolbar(self):
-        self.layout.addWidget(self.toolbar)
-
-    def del_toolbar(self):
-        self.toolbar.setParent(None)
-        
+ 
+ 
     def get_menubar(self):
 
         if self.current_theme == "dark":
@@ -231,12 +216,12 @@ class CryptoTradingApp(QWidget):
         menubar.addMenu(ai_menu)
 
         tai_action = QAction('Обучить', self)
-        tai_action.triggered.connect(self.ai_manager.train_model)
+        tai_action.triggered.connect(self.train_model)
         tai_action.setIcon(self.recolor_svg_icon("resources/integrations.svg", icon_color))
         ai_menu.addAction(tai_action)
 
         rai_action = QAction('Запустить', self)
-        rai_action.triggered.connect(self.ai_manager.run_ai)
+        rai_action.triggered.connect(self.train_model)
         rai_action.setIcon(self.recolor_svg_icon("resources/brain-organ.svg", icon_color))
         ai_menu.addAction(rai_action)
 
@@ -250,15 +235,11 @@ class CryptoTradingApp(QWidget):
         toggle_theme_action.setIcon(self.recolor_svg_icon("resources/theme.svg", icon_color))
         theme_menu.addAction(toggle_theme_action)
 
-        add_tb_action = QAction('Открыть тулбар', self)
-        add_tb_action.triggered.connect(self.add_toolbar)
+        add_tb_action = QAction('Очистить график', self)
+        add_tb_action.triggered.connect(self.clear_plot)
         add_tb_action.setIcon(self.recolor_svg_icon("resources/theme.svg", icon_color))
         theme_menu.addAction(add_tb_action)
-
-        del_tb_action = QAction('Скрыть тулбар', self)
-        del_tb_action.triggered.connect(self.del_toolbar)
-        del_tb_action.setIcon(self.recolor_svg_icon("resources/theme.svg", icon_color))
-        theme_menu.addAction(del_tb_action)
+        
 
         settings_menu = QMenu(' Правка ', self)
         menubar.addMenu(settings_menu)
@@ -343,7 +324,6 @@ class CryptoTradingApp(QWidget):
     def load_crypto_list(self):
         """Загружает список популярных криптовалют и их иконки"""
         stablecoins = {'USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'PAX', 'GUSD', 'SUSD'}
-        self.cryptocompare_api = CryptocompareApi()
         self.cryptocompare_api.show_toast.connect(self.show_toast)
         data = self.cryptocompare_api.get_coins()
 
@@ -396,16 +376,6 @@ class CryptoTradingApp(QWidget):
 
         return QIcon(pixmap)
 
-    def create_vertical_separator(self):
-        # Создаем QFrame для вертикального разделителя
-        separator = QFrame()
-        separator.setFrameShape(QFrame.VLine)  # Вертикальная линия
-        separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("color: gray; background-color: gray;")
-        separator.setFixedWidth(2)  # Устанавливаем фиксированную ширину линии
-
-        return separator
-
 # Импорт-экспорт стратегий
 
     def export_strategy(self):
@@ -438,7 +408,7 @@ class CryptoTradingApp(QWidget):
 # Настройки
 
     def open_settings_dialog(self):
-        dialog = SettingsDialog(self.settings, self)
+        dialog = SettingsWindow(self.settings, self)
         if dialog.exec_() == QDialog.Accepted:
             self.load_settings()
 
@@ -552,6 +522,7 @@ class CryptoTradingApp(QWidget):
         # Метод, который будет вызван после завершения скачивания
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.data_downloaded.disconnect(self.on_data_downloaded_run_it)
+        self.thread.show_toast.disconnect(self.show_toast)
         self.thread = None
         self.df = data
         self.run_strategy()
@@ -598,82 +569,34 @@ class CryptoTradingApp(QWidget):
         self.plot(self.df, positions, balance, indicators)
 
     def on_calculation_complete_on_trade(self, positions, balance, indicators):
-        self.positions = self.compare_positions(positions, self.positions)
+        self.positions = self.trading_sync_manager.compare_positions(positions, self.positions)
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.calculation_complete.disconnect(self.on_calculation_complete_on_trade)
         self.plot(self.df, positions, balance, indicators)
 
-    def compare_positions(self, current_positions, previous_positions):
-        log = []
-        """
-        Синхронизирует изменения между таблицами позиций и записывает лог в файл.
-        
-        :param current_positions: DataFrame с текущими позициями
-        :param previous_positions: DataFrame с позициями с предыдущего цикла или None, если это первый цикл
-        :param exchange_api: Объект API для работы с биржей
-        :param log_file_path: Путь к файлу для записи логов
-        :return: Обновленная таблица с синхронизацией
-        """
 
-            # Первый цикл: если нет предыдущей таблицы
-        if not previous_positions:
-            for pos in current_positions:
-                pos['syncStatus'] = 'synced'  # Добавляем поле синхронизации
-            return current_positions
-        
-        # Сравнение текущих и предыдущих позиций
-        for current_pos in current_positions:
-            matching_pos = next((p for p in previous_positions if p['posId'] == current_pos['posId']), None)
 
-            # Игнорируем не синхронизированные позиции из предыдущей таблицы
-            if matching_pos and matching_pos['syncStatus'] == 'unsynced':
-                continue
+
+    def train_model(self):
+        self.bar.setFormat("Обучение")
+
+        if self.file_handler.load_candlesticks():
+            self.thread = AIManager()
+            self.thread.df = self.df
+
+            #self.thread.progress_changed.connect(self.on_progress_changed) 
+            self.thread.training_complete.connect(self.on_training_complete)
+            self.thread.plot_some.connect(self.plot)
             
-            # Обрабатываем изменения тейка, стопа, статуса
-            if matching_pos:
-                changes = []
-                
-                if current_pos['tpTriggerPx'] != matching_pos['tpTriggerPx']:
-                    changes.append('take profit changed')
+            self.thread.run() 
 
-                if current_pos['slTriggerPx'] != matching_pos['slTriggerPx']:
-                    changes.append('stop loss changed')
-
-                if current_pos['status'] != matching_pos['status']:
-                    changes.append(f"status changed to {current_pos['status']}")
-
-                if changes:
-                    try:
-                        # Пытаемся синхронизировать с биржей
-                        #self.api.sync_position(current_pos)
-                        current_pos['syncStatus'] = 'synced'
-                        message = f"Position {current_pos['posId']} synced: {', '.join(changes)}"
-                        self.log_message(message)
-                        self.log_window.update_log(message)
-                    except Exception as e:
-                        current_pos['syncStatus'] = 'unsynced'
-                        message = f"Error syncing position {current_pos['posId']}: {str(e)}"
-                        self.log_message(message)
-                        self.log_window.update_log(message)
-                else:
-                    current_pos['syncStatus'] = 'synced'
-            else:
-                if current_pos['status'] == 'open':
-                    # Новая позиция
-                    try:
-                        #self.api.open_position(current_pos)
-                        current_pos['syncStatus'] = 'synced'
-                        message = f"New position {current_pos['posId']} opened"
-                        self.log_message(message)
-                        self.log_window.update_log(message)
-                    except Exception as e:
-                        current_pos['syncStatus'] = 'unsynced'
-                        message = f"Error opening new position {current_pos['posId']}: {str(e)}"
-                        self.log_message(message)
-                        self.log_window.update_log(message)
-        
-        print(log)
-        return current_positions
+    def on_training_complete(self, model):
+        self.model = model
+        self.file_handler.save_model_dialog()
+        #self.thread.progress_changed.disconnect(self.on_progress_changed) 
+        self.thread.training_complete.disconnect(self.on_training_complete)
+        self.thread.plot_some.connect(self.plot)
+        #self.plot(self.df)
 
 # Отрисовка графиков
 
@@ -916,6 +839,10 @@ class CryptoTradingApp(QWidget):
 
     """
 
+    def clear_plot(self):
+        self.canvas.candlestick_plot.clear()
+        self.canvas.balance_plot.clear()
+
     def plot(self, df, positions, balance, indicators):
         self.bar.setFormat("Отрисовка")
 
@@ -940,7 +867,7 @@ class CryptoTradingApp(QWidget):
 
     def open_positions_table(self):
         if self.positions: 
-            positions_table = PositionsTable(self.positions, self.current_theme, self.is_trade)
+            positions_table = PositionsWindow(self.positions, self.current_theme, self.is_trade)
             positions_table.exec_()
 
     def setup_price_updates(self):
@@ -991,7 +918,7 @@ class CryptoTradingApp(QWidget):
         toast.applyPreset(preset)  # Apply style preset
         toast.show()
 
-############
+# Торговля
 
     def start_trading(self):
         self.is_trade = True

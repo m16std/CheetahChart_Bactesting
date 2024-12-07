@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QGraphicsRectItem, QGridLayout, QLabel, QWidget, QFr
 from datetime import datetime as dt
 from PyQt5.QtGui import QFont, QColor, QLinearGradient, QBrush
 from PyQt5.QtCore import QMargins
+import math
 
 class PGCanvas(QWidget):
 
@@ -224,21 +225,24 @@ class PGCanvas(QWidget):
 
     def plot_balance(self, data):
         init = data['value'].iloc[0]
-        cm = pg.ColorMap([0.0, 1.0], ['#089981', '#F23645'])
-        pen = cm.getPen( span=(init+0.05,init-0.05), width=2 )
+        cm = pg.ColorMap([0.0, 1.0], ['#F23645', '#089981'])
+        pen0 = cm.getPen( span=(init-0.5,init+0.0), width=2 )
         level = (init - data['value'].min())/(data['value'].max() - data['value'].min())
         grad = QtGui.QLinearGradient(0, data['value'].min(), 0, data['value'].max())
         grad.setColorAt(0.0, pg.mkColor('#F23645'))
         grad.setColorAt(level, QColor(0, 0, 0, 0))
         grad.setColorAt(1, pg.mkColor('#089981'))
         brush = QtGui.QBrush(grad)
-        self.balance_plot.plot(data['ts'].astype('int64') // 10**9, data['value'], fillLevel=init, brush=brush, pen=pen, name="Balance")
+        self.balance_plot.plot(data['ts'].astype('int64') // 10**9, data['value'], fillLevel=init, brush=brush, pen=pen0, name="Balance")
 
     def plot_indicators(self, ohlc_data, indicator_names):
-        colors = ['#00FF10', '#FF0010', '#0505F0', '#A010A0']
+        colors = ['#00FF10', '#FF0010', '#0505F0', '#A010A0', '#10F0F0', '#FFFFFF', '#F01060']
         for i, ind_name in enumerate(indicator_names):
             if ind_name in ohlc_data.columns:
-                if ohlc_data[ind_name].iloc[-1] > ohlc_data['close'].iloc[-1] * 0.7 and ohlc_data[ind_name].iloc[-1] < ohlc_data['close'].iloc[-1] * 1.3: 
+                j = len(ohlc_data) - 1
+                while j > 0 and math.isnan(ohlc_data[ind_name].iloc[j]):
+                    j -= 1
+                if ohlc_data[ind_name].iloc[j] > ohlc_data['close'].iloc[j] * 0.5 and ohlc_data[ind_name].iloc[j] < ohlc_data['close'].iloc[j] * 2: 
                     indicator_data = ohlc_data[ind_name]
                     color = colors[i % len(colors)]
                     plot_item = self.candlestick_plot.plot(
@@ -292,23 +296,20 @@ class PGCanvas(QWidget):
                     buy_text.setFont(bold_font)
                     buy_text.setAnchor((0.5, 0))  # Центрирование под свечой
                     self.candlestick_plot.addItem(buy_text)
-                    buy_text.setPos(xlo[-1], open_candle['low'] - padding)
-                    
+                    buy_text.setPos(xlo[-1], open_candle['low'] - padding)  
 
                 if position['status'] == 'closed':
                     xlc.append(position['closeTimestamp'].value // 10**9)
                     ylc.append(position['closePrice'])
                 
-                    # Надпись pnl
                     if position['pnl'] > 0:
                         pnl_text = TextItem(f"+{position['pnl']:.1f}\nclose", color=(150, 150, 150))
                     else:
-                        pnl_text = TextItem(f"{position['pnl']:.2f}", color=(150, 150, 150))
+                        pnl_text = TextItem(f"{position['pnl']:.2f}\nclose", color=(150, 150, 150))
                     pnl_text.setFont(bold_font)
                     pnl_text.setAnchor((0.5, 1))
                     self.candlestick_plot.addItem(pnl_text)
-                    pnl_text.setPos(xlc[-1], close_candle['high'] + padding)
-                    
+                    pnl_text.setPos(xlc[-1], close_candle['high'] + padding)                   
 
                     self.add_tp_sl_rectangles(position, open_ts.value // 10**9, close_ts.value // 10**9, ohlc_data['close'].iloc[-1])
                 else:
@@ -328,19 +329,14 @@ class PGCanvas(QWidget):
                     xsc.append(position['closeTimestamp'].value // 10**9)
                     ysc.append(position['closePrice'])
                 
-                    # Надпись pnl
-                    pnl_text = TextItem(f"{position['pnl']:.1f}", color=(150, 150, 150))
+                    if position['pnl'] > 0:
+                        pnl_text = TextItem(f"+{position['pnl']:.1f}\nclose", color=(150, 150, 150))
+                    else:
+                        pnl_text = TextItem(f"{position['pnl']:.2f}\nclose", color=(150, 150, 150))
                     pnl_text.setFont(bold_font)
                     pnl_text.setAnchor((0.5, 1))
                     self.candlestick_plot.addItem(pnl_text)
                     pnl_text.setPos(xsc[-1], close_candle['high'] + padding)
-                    
-                    # Надпись close
-                    close_text = TextItem("close", color=(150, 150, 150))
-                    close_text.setFont(bold_font)
-                    close_text.setAnchor((0.5, 1))
-                    self.candlestick_plot.addItem(close_text)
-                    close_text.setPos(xsc[-1], close_candle['high'] + padding*2)
 
                     self.add_tp_sl_rectangles(position, open_ts.value // 10**9, close_ts.value // 10**9, ohlc_data['close'].iloc[-1])
                 else:
