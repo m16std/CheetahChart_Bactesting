@@ -1,0 +1,149 @@
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QMessageBox, QFrame, QHBoxLayout
+from PyQt5.QtCore import QSettings, Qt
+from PyQt5.QtGui import QIcon
+
+class APISettingsWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Настройки API")
+        self.setMinimumWidth(300)
+        self.settings = QSettings("MyApp", "MyCompany")
+        self.layout = QVBoxLayout()
+        self.layout.setSpacing(5)
+
+        self.api_list_combo = QComboBox()
+        self.load_api_list()
+        self.layout.addWidget(QLabel("Выберите API:"))
+        self.layout.addWidget(self.api_list_combo)
+
+        # Добавляем горизонтальную линию
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        self.layout.addWidget(separator)
+
+        # Надпись "Добавление нового API" с выравниванием по центру
+        add_api_label = QLabel("Добавление нового API")
+        add_api_label.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(add_api_label)
+
+        self.api_name_input = QLineEdit()
+        self.layout.addWidget(QLabel("Имя API:"))
+        self.layout.addWidget(self.api_name_input)
+
+        # Поле API Key с кнопкой показа/скрытия символов
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setEchoMode(QLineEdit.Password)
+        self.layout.addWidget(QLabel("API Key:"))
+        self.layout.addLayout(self._create_password_field(self.api_key_input))
+
+        # Поле API Secret с кнопкой показа/скрытия символов
+        self.api_secret_input = QLineEdit()
+        self.api_secret_input.setEchoMode(QLineEdit.Password)
+        self.layout.addWidget(QLabel("API Secret:"))
+        self.layout.addLayout(self._create_password_field(self.api_secret_input))
+
+        # Поле Passphrase с кнопкой показа/скрытия символов
+        self.passphrase_input = QLineEdit()
+        self.passphrase_input.setEchoMode(QLineEdit.Password)
+        self.layout.addWidget(QLabel("Passphrase:"))
+        self.layout.addLayout(self._create_password_field(self.passphrase_input))
+
+        save_button = QPushButton("Сохранить")
+        save_button.clicked.connect(self.save_api)
+        self.layout.addWidget(save_button)
+
+        delete_button = QPushButton("Удалить выбранный API")
+        delete_button.clicked.connect(self.delete_api)
+        self.layout.addWidget(delete_button)
+
+        self.setLayout(self.layout)
+        self.api_list_combo.currentIndexChanged.connect(self.load_selected_api)
+
+    def _create_password_field(self, line_edit):
+        """Создает поле ввода с кнопкой показа/скрытия символов."""
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        line_edit.setStyleSheet("border-top-left-radius: 5px; border-bottom-left-radius: 5px;")
+        layout.addWidget(line_edit)
+
+        toggle_button = QPushButton()
+        toggle_button.setIcon(QIcon("resources/eye.svg"))  # Изначально используется иконка "глаз"
+        toggle_button.setCheckable(True)
+        toggle_button.setStyleSheet("""
+            QPushButton {
+                border: none;
+                background-color: #f0f0f0;
+                border-top-right-radius: 5px;
+                border-bottom-right-radius: 5px;
+            }
+            QPushButton:checked {
+                background-color: #d0d0d0;
+            }
+        """)
+        toggle_button.setFixedWidth(30)
+        toggle_button.toggled.connect(lambda checked: self._toggle_password_visibility(line_edit, toggle_button, checked))
+        layout.addWidget(toggle_button)
+
+        return layout
+
+    def _toggle_password_visibility(self, line_edit, toggle_button, checked):
+        """Переключает видимость текста и обновляет иконку кнопки."""
+        line_edit.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password)
+        toggle_button.setIcon(QIcon("resources/eye-slash.svg" if checked else "resources/eye.svg"))
+
+    def load_api_list(self):
+        self.api_list_combo.clear()
+        api_list = self.settings.value("api_list", [])
+        if api_list:
+            self.api_list_combo.addItems(api_list)
+
+    def load_selected_api(self):
+        """Загружает данные выбранного API и сохраняет его как активный."""
+        selected_api = self.api_list_combo.currentText()
+        if selected_api:
+            self.api_key_input.setText(self.settings.value(f"{selected_api}_key", ""))
+            self.api_secret_input.setText(self.settings.value(f"{selected_api}_secret", ""))
+            self.passphrase_input.setText(self.settings.value(f"{selected_api}_passphrase", ""))
+            self.settings.setValue("active_api", selected_api)
+
+    def save_api(self):
+        api_name = self.api_name_input.text().strip()
+        if not api_name:
+            QMessageBox.warning(self, "Ошибка", "Введите имя API.")
+            return
+
+        self.settings.setValue(f"{api_name}_key", self.api_key_input.text())
+        self.settings.setValue(f"{api_name}_secret", self.api_secret_input.text())
+        self.settings.setValue(f"{api_name}_passphrase", self.passphrase_input.text())
+
+        api_list = self.settings.value("api_list", [])
+        if not api_list:
+            api_list = []
+        if api_name not in api_list:
+            api_list.append(api_name)
+            self.settings.setValue("api_list", api_list)
+
+        QMessageBox.information(self, "Успех", "API сохранен.")
+        self.load_api_list()
+        self.api_name_input.clear()
+
+    def delete_api(self):
+        api_name = self.api_list_combo.currentText()
+        if not api_name:
+            QMessageBox.warning(self, "Ошибка", "Выберите API для удаления.")
+            return
+
+        self.settings.remove(f"{api_name}_key")
+        self.settings.remove(f"{api_name}_secret")
+        self.settings.remove(f"{api_name}_passphrase")
+
+        api_list = self.settings.value("api_list", [])
+        if api_name in api_list:
+            api_list.remove(api_name)
+            self.settings.setValue("api_list", api_list)
+
+        QMessageBox.information(self, "Успех", "API удален.")
+        self.load_api_list()

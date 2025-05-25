@@ -50,7 +50,7 @@ class DataDownloadThread(QThread):
             data.extend(response)
             url = f'https://www.okx.com/api/v5/market/history-candles'
             while len(data) < limit:
-                self.progress_changed.emit(round(len(data) / limit*100)) 
+                self.progress_changed.emit(round(len(data) / limit * 100)) 
                 params = {
                     'instId': symbol,
                     'bar': interval,
@@ -89,4 +89,3 @@ class DataDownloadThread(QThread):
         except Exception as e:
             self.show_toast.emit(ToastPreset.ERROR, 'Ошибка загрузки цены валюты. Скорее всего нет интернета или не отвечает апи cryptocompare.com',  f"{e}")
             return "N/A"
-        

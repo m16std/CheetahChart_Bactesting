@@ -17,12 +17,18 @@ class FileManager:
         else:
             return False
 
-    def load_candlesticks(self):
-        file_name, _ = QFileDialog.getOpenFileName(self.app, "Открыть свечки", "", "CSV Files (*.csv)")
+    def load_candlesticks(self, file_name=None):
+        """Загружает данные свечей из файла."""
+        if not file_name:
+            file_name, _ = QFileDialog.getOpenFileName(self.app, "Открыть файл", "", "CSV Files (*.csv)")
         if file_name:
-            self.app.df = pd.read_csv(file_name, index_col=0, parse_dates=True)
-            print(f"Candlestick data loaded from {file_name}")
-            return True
+            try:
+                self.app.df = pd.read_csv(file_name, index_col=0, parse_dates=True)
+                print(f"Candlestick data loaded from {file_name}")
+                return True
+            except Exception as e:
+                QMessageBox.critical(self.app, "Ошибка", f"Не удалось загрузить файл: {e}")
+                return False
         return False
 
     def save_model_dialog(self):

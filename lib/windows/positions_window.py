@@ -36,6 +36,9 @@ class PositionsWindow(QDialog):
         self.table_widget.setColumnCount(ColumnCount) 
         max_pnl = 0 
         if len(positions) > 0:
+            # Ensure PnL values are numeric
+            for position in positions:
+                position['pnl'] = float(position.get('pnl', 0))
             max_pnl = max(abs(position['pnl']) for position in positions)
 
         # Устанавливаем заголовки столбцов

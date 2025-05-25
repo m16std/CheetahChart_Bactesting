@@ -1,1 +1,1 @@
-D:/botv0/bot_v0/strategies
+/Users/deforest/Documents/VS Сode/cheetostrading/bot_v0/strategies

@@ -1,8 +1,9 @@
 from lib.api.okx_trade_api import OKXApi
 
 class TradingSyncManager:
-    def __init__(self):
-        self.api = OKXApi(api_key='your_api_key', api_secret='your_api_secret', passphrase='your_passphrase')
+    def __init__(self, api_key=None, api_secret=None, passphrase=None):
+        # Initialize with default or provided API credentials
+        self.api = OKXApi(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
         self.log = []
 
         
@@ -45,7 +46,13 @@ class TradingSyncManager:
                 if current_pos['slTriggerPx'] != matching_pos['slTriggerPx']:
                     changes.append('stop loss changed')
 
-                
+                # Новая обработка: изменение количества
+                if current_pos['qty'] != matching_pos['qty']:
+                    changes.append(f"quantity changed to {current_pos['qty']}")
+
+                # Новая обработка: изменение цены открытия
+                if current_pos['openPrice'] != matching_pos['openPrice']:
+                    changes.append(f"open price changed to {current_pos['openPrice']}")
 
                 if changes:
                     try:
@@ -85,15 +92,16 @@ class TradingSyncManager:
         """ Синхронизация позиций из таблицы с биржей """
         # Получаем открытые позиции на бирже
         self.strategy_positions = positions
-        open_positions = self.api.fetch_positions()
+        open_positions = self.api.get_open_positions()
 
         for pos in self.strategy_positions:
             if pos['status'] == 'open' and not pos.get('synced'):
                 # Открываем позицию на бирже
                 response = self.api.open_position(
                     symbol=pos['symbol'],
-                    side=pos['posSide'],
                     qty=pos['qty'],
+                    posSide=pos['posSide'],
+                    leverage=pos.get('leverage', 1),
                     tp=pos.get('tpTriggerPx'),
                     sl=pos.get('slTriggerPx')
                 )
@@ -107,7 +115,8 @@ class TradingSyncManager:
                 # Закрываем позицию на бирже
                 response = self.api.close_position(
                     symbol=pos['symbol'],
-                    pos_id=pos['posId']
+                    posId=pos['posId'],
+                    posSide=pos['posSide']
                 )
                 if response:
                     pos['synced'] = False
