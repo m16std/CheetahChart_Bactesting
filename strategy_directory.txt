@@ -1,1 +1,1 @@
-/Users/deforest/Documents/VS Сode/cheetostrading/bot_v0/strategies
+C:/Users/vsmor/Documents/VS Code Projects/bot_v0/strategies

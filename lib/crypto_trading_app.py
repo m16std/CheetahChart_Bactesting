@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import  QVBoxLayout, QStyledItemDelegate, QWidget, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox
+from PyQt5.QtWidgets import  QVBoxLayout, QStyledItemDelegate, QWidget, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QSplitter
 from PyQt5.QtGui import QPainter, QPixmap, QIcon, QColor, QPainterPath, QPen
 from PyQt5.QtCore import Qt, QSettings, QSize, QRect, QRectF, QTimer, QThread, pyqtSignal
 from pyqttoast import Toast, ToastPreset
@@ -9,6 +9,7 @@ import qdarktheme
 from datetime import datetime, timezone
 import logging
 import os
+import importlib 
 
 from lib.managers.strategies_manager import StrategyManager
 from lib.managers.trading_sync_manager import TradingSyncManager
@@ -25,12 +26,16 @@ from lib.windows.multitask.log_window import LogWindow
 from lib.api.okx_trade_api import OKXApi
 from lib.windows.real_positions_window import RealPositionsWindow
 from lib.windows.multitask.multitask_window import MultitaskWindow
-from PyQt5.QtWidgets import QSplitter
 from lib.api.api_manager import APIManager
 from lib.widgets.padded_item_delegate import PaddedItemDelegate
 from lib.threads.trading_status_updater import TradingStatusUpdater
 from lib.windows.python_editor_window import PythonEditorWindow
 from lib.threads.strategy_test_thread import StrategyTestThread
+from lib.strategies.base_strategy import BaseStrategy
+from lib.windows.data_source_window import DataSourceWindow
+from lib.api.okx_load_api import DataDownloadThread
+from lib.api.binance_load_api import BinanceAPI
+from lib.api.bybit_load_api import BybitAPI
 
 pd.options.mode.chained_assignment = None
 
@@ -39,12 +44,11 @@ import os
 class CryptoTradingApp(QWidget):
     add_tab_signal = pyqtSignal(QWidget, str)  # Сигнал для добавления новой вкладки
     update_tab_title_signal = pyqtSignal(str)  # Сигнал для обновления названия вкладки
-    theme_changed_signal = pyqtSignal(str)  # Signal to notify theme changes
+    theme_changed_signal = pyqtSignal(str)  
 
     def __init__(self):
         super().__init__()
-        self.api_manager = APIManager()  # Инициализация APIManager
-        # Инициализация переменных
+        self.api_manager = APIManager() 
         self.is_trade = False
         self.positions = None
         self.previous_price = '0.0'
@@ -68,6 +72,9 @@ class CryptoTradingApp(QWidget):
         self.timer_refresh = QTimer(self)  # Таймер для обновления окна торговли
         self.timer_refresh.timeout.connect(self.update_trading_status_window)
         self.timer_refresh.start(5000) 
+
+        self.data_source = "OKX"  
+        self.data_loader = DataDownloadThread  
 
      
 
@@ -136,7 +143,7 @@ class CryptoTradingApp(QWidget):
         else:
             self.log_window.show()
             self.log_window.load_logs()  # Загружаем содержимое файла лога
-            self.right_splitter.setSizes([400, 200])  # Настроить размеры для отображения окна логов
+            self.right_splitter.setSizes([400, 200]) 
  
  
     def get_menubar(self):
@@ -246,7 +253,6 @@ class CryptoTradingApp(QWidget):
         show_stats_action.setIcon(self.recolor_svg_icon("resources/binoculars.svg", icon_color))
         strat_menu.addAction(show_stats_action)
 
-        # Add optimization action
         optimize_action = QAction('Оптимизация параметров', self)
         optimize_action.triggered.connect(self.show_optimization_dialog)
         optimize_action.setIcon(self.recolor_svg_icon("resources/optimization.svg", icon_color))
@@ -262,7 +268,6 @@ class CryptoTradingApp(QWidget):
         add_trading_panel_action.setIcon(self.recolor_svg_icon("resources/open_window.svg", icon_color))
         trade_menu.addAction(add_trading_panel_action)
 
-        # Add action to open real positions window
         open_real_positions_action = QAction('Окно позиций', self)
         open_real_positions_action.triggered.connect(self.open_real_positions_window)
         open_real_positions_action.setIcon(self.recolor_svg_icon("resources/binoculars.svg", icon_color))
@@ -273,7 +278,6 @@ class CryptoTradingApp(QWidget):
         set_api_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
         trade_menu.addAction(set_api_action)
 
-        # Restore "Check API" button
         check_api_action = QAction('Проверить API', self)
         check_api_action.triggered.connect(self.check_api_status)
         check_api_action.setIcon(self.recolor_svg_icon("resources/check.svg", icon_color))
@@ -319,8 +323,13 @@ class CryptoTradingApp(QWidget):
         crypto_list_update_action.setIcon(self.recolor_svg_icon("resources/refresh.svg", icon_color))
         settings_menu.addAction(crypto_list_update_action)
 
-        help_menu = QMenu(' Справка ', self)
-        menubar.addMenu(help_menu)
+        data_source_action = QAction('Выбор источника данных', self)
+        data_source_action.triggered.connect(self.open_data_source_window)
+        data_source_action.setIcon(self.recolor_svg_icon("resources/source.svg", icon_color))
+        settings_menu.addAction(data_source_action)
+
+        help_menu = QAction(' Справка ', self)
+        menubar.addAction(help_menu)
 
         return menubar
 
@@ -338,6 +347,7 @@ class CryptoTradingApp(QWidget):
                 QMessageBox.warning(self, "Ошибка", "Неподдерживаемый формат файла.")
 
     def get_inputs_layout(self):
+        """Создает макет для ввода параметров."""
         font_size = 13
         
         self.symbol_input = QComboBox(self)
@@ -393,26 +403,25 @@ class CryptoTradingApp(QWidget):
         return inputs_layout
     
     def on_strategy_changed(self, strategy_name):
-        """Handle strategy selection change"""
+        """Обрабатывает изменение выбранной стратегии."""
         self.update_tab_title(strategy_name)
-        # Get current strategy and update trading window
         current_strategy = self.strategy_manager.strategy_dict.get(strategy_name)
         if hasattr(self, 'trading_status_window'):
             self.trading_status_window.update_strategy(current_strategy)
 
     def update_tab_title(self, strategy_name):
-        """Emit a signal to update the tab title with the selected strategy name."""
+        """Отправляет сигнал для обновления названия вкладки с выбранной стратегией."""
         self.update_tab_title_signal.emit(strategy_name)
 
     def load_icon_from_file(self, crypto_name):
-        """Загружает иконку из локальной директории, если она существует"""
+        """Загружает иконку из локальной директории, если она существует."""
         icon_path = os.path.join(self.icon_dir, f"{crypto_name}.png")
         if os.path.exists(icon_path):
             return QPixmap(icon_path)
         return None
 
     def load_crypto_list(self):
-        """Загружает список популярных криптовалют и их иконки"""
+        """Загружает список популярных криптовалют и их иконки."""
         stablecoins = {'USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'PAX', 'GUSD', 'SUSD'}
         self.cryptocompare_api.show_toast.connect(self.show_toast)
         data = self.cryptocompare_api.get_coins()
@@ -435,7 +444,7 @@ class CryptoTradingApp(QWidget):
         return crypto_list
     
     def update_crypto_dropdown(self):
-        """Обновляет выпадающий список криптовалют"""
+        """Обновляет выпадающий список криптовалют."""
         try:
             crypto_list = self.load_crypto_list()
 
@@ -454,6 +463,7 @@ class CryptoTradingApp(QWidget):
             self.show_toast(ToastPreset.ERROR, 'Ошибка загрузки иконок валют. Скорее всего нет интернета или не отвечает апи cryptocompare.com',  f"{e}")
 
     def recolor_svg_icon(self, svg_path, color):
+        """Перекрашивает SVG-иконку в указанный цвет."""
         renderer = QSvgRenderer(svg_path)
         pixmap = QPixmap(32, 32)  # Размер иконки
         pixmap.fill(Qt.transparent)
@@ -469,32 +479,67 @@ class CryptoTradingApp(QWidget):
 # Импорт-экспорт стратегий
 
     def export_strategy(self):
+        """Экспортирует стратегию."""
         self.thread = StrategyManager()
         self.thread.run('', [], 0, 0, 0, 0, 0, 0, mode="export") 
         
     def import_strategy(self):
-        self.thread = StrategyManager()    
-        self.thread.import_complete.connect(self.add_strategy)
-        self.thread.create_toast.connect(self.show_toast)
-        self.thread.run(mode="import") 
+        """Импортирует стратегию из файла и динамически загружает её как класс."""
+        file_name, _ = QFileDialog.getOpenFileName(self, "Импортировать стратегию", "", "Python Files (*.py)")
+        if not file_name:
+            return
 
-    def add_strategy(self, strategy_name, strategy_function):
-        # Добавление новой стратегии в словарь и обновление выпадающего списка
-        self.strat_input.addItem(strategy_name)
-        self.strategy_manager.strategy_dict[strategy_name] = strategy_function
-        print(f'Strategy "{strategy_name}" imported successfully.')
+        try:
+            strategy_namespace = {}
+            with open(file_name, 'r') as file:
+                exec(file.read(), strategy_namespace)
+
+            for obj in strategy_namespace.values():
+                if isinstance(obj, type) and issubclass(obj, BaseStrategy) and obj != BaseStrategy:
+                    strategy_instance = obj()
+                    strategy_instance.set_manager(self.strategy_manager)
+                    self.add_strategy(strategy_instance.name, strategy_instance)
+                    QMessageBox.information(self, "Успех", f"Стратегия {strategy_instance.name} успешно импортирована.")
+                    return
+            QMessageBox.warning(self, "Ошибка", "Не удалось найти класс стратегии, наследующий BaseStrategy.")
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось импортировать стратегию. Ошибка: {str(e)}")
 
     def load_external_strategies(self):
+        """Загружает внешние стратегии из указанной директории."""
         strategy_directory = self.file_handler.check_strategy_directory()
-        if strategy_directory != None:
-            self.strategy_manager.strategy_directory = strategy_directory 
-            self.strategy_manager.load_strategies_from_directory()
-            self.update_strat_input()
+        if not strategy_directory:
+            return
+
+        self.strategy_manager.strategy_directory = strategy_directory
+        strategy_files = [f for f in os.listdir(strategy_directory) if f.endswith(".py")]
+
+        for file in strategy_files:
+            try:
+                file_path = os.path.join(strategy_directory, file)
+                module_name = os.path.splitext(file)[0]
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                for obj in vars(module).values():
+                    if isinstance(obj, type) and issubclass(obj, BaseStrategy) and obj != BaseStrategy:
+                        strategy_instance = obj()
+                        strategy_instance.set_manager(self.strategy_manager)
+                        self.add_strategy(strategy_instance.name, strategy_instance)
+                        break
+            except Exception as e:
+                QMessageBox.warning(self, "Ошибка", f"Не удалось загрузить стратегию из {file}. Ошибка: {str(e)}")
+
+    def add_strategy(self, strategy_name, strategy_instance):
+        """Добавляет новую стратегию в менеджер и обновляет выпадающий список."""
+        self.strat_input.addItem(strategy_name)
+        self.strategy_manager.strategy_dict[strategy_name] = strategy_instance
 
     def update_strat_input(self):
+        """Обновляет выпадающий список стратегий."""
         self.strat_input.clear()
         self.strat_input.addItems(self.strategy_manager.strategy_dict.keys())
-        # Update strategy in trading window when strategy list changes
         if hasattr(self, 'trading_status_window'):
             current_strategy = self.strategy_manager.strategy_dict.get(self.strat_input.currentText())
             self.trading_status_window.update_strategy(current_strategy)
@@ -502,12 +547,13 @@ class CryptoTradingApp(QWidget):
 # Настройки
 
     def open_settings_dialog(self):
+        """Открывает диалог настроек."""
         dialog = SettingsWindow(self.settings, self)
         if (dialog.exec_() == QDialog.Accepted):
             self.load_settings()
 
     def load_settings(self):
-        # Здесь можно применять настройки в логике программы
+        """Загружает настройки приложения."""
         self.commission = float(self.settings.value("commission", "0.0008"))
         self.initial_balance = int(self.settings.value("initial_balance", "100"))
         self.leverage = float(self.settings.value("leverage", "1"))
@@ -515,14 +561,16 @@ class CryptoTradingApp(QWidget):
         self.position_type = self.settings.value("position_type", "percent")
         self.position_size = float(self.settings.value("position_size", "100"))
         self.refresh_interval = int(self.settings.value("refresh_interval", "10"))
+        self.data_source = self.settings.value("data_source", "OKX")  # Load saved data source
+        self.update_data_loader()
         #self.show_toast(ToastPreset.SUCCESS, 'Загружены настройки!',  f"Комиссия: {self.commission}, Начальный баланс: {self.initial_balance}, Плечо: {self.leverage}, Профит фактор: {self.profit_factor}, Размер позиции: {self.position_size}, Тип: {self.position_type}, Частота обновления: {self.refresh_interval}")
 
 # Тема приложения theme
 
     def apply_theme(self, theme=None):
-        """Apply the theme to CryptoTradingApp."""
+        """Применяет тему к приложению."""
         if theme:
-            self.current_theme = theme  # Update the current theme if provided
+            self.current_theme = theme 
         if self.current_theme == "dark":
             qdarktheme.setup_theme(
                 custom_colors={
@@ -547,7 +595,6 @@ class CryptoTradingApp(QWidget):
             self.trading_status_window.apply_theme(self.current_theme)
 
     def toggle_theme(self):
-        # Переключаем между темной и светлой темой
         new_theme = "dark" if self.current_theme == "light" else "light"
         self.current_theme = new_theme  # Обновляем текущую тему
         self.theme_changed_signal.emit(self.current_theme)
@@ -556,63 +603,62 @@ class CryptoTradingApp(QWidget):
         self.settings.setValue("theme", self.current_theme)
 
     def load_theme(self):
+        """Загружает текущую тему из настроек."""
         return self.settings.value("theme")
     
 # Запуск стратегий
 
     def open_and_run(self):
+        """Открывает файл и запускает стратегию."""
         if self.file_handler.load_candlesticks():
             self.run_strategy()
 
     def open_and_draw(self):
+        """Открывает файл и отображает данные на графике."""
         if self.file_handler.load_candlesticks():
             self.plot(self.df, [], [], [])
 
-    def download_and_run(self):
-        symbol = self.symbol_input.currentText()
-        interval = self.interval_input.currentText()
-        limit = self.limit_input.value()
-        self.bar.setFormat("Загрузка")
-
-        self.thread = DataDownloadThread(symbol, interval, limit)
-        self.thread.progress_changed.connect(self.on_progress_changed) 
-        self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
-        self.thread.show_toast.connect(self.show_toast)
-        self.stop_price_updates()
-        self.thread.start()  # Запускаем поток
-
-    def download_and_save(self):
-        symbol = self.symbol_input.currentText()
-        interval = self.interval_input.currentText()
-        limit = self.limit_input.value()
-        self.bar.setFormat("Загрузка")
-    
-        self.thread = DataDownloadThread(symbol, interval, limit)
+    def setup_download_thread(self, symbol, interval, limit, mode, on_data_downloaded):
+        """Настраивает поток для загрузки данных с выбранного источника."""
+        self.thread = self.data_loader(symbol, interval, limit, mode)
         self.thread.progress_changed.connect(self.on_progress_changed)
-        self.thread.data_downloaded.connect(self.on_data_downloaded_save_it)
+        self.thread.data_downloaded.connect(on_data_downloaded)
         self.thread.show_toast.connect(self.show_toast)
         self.stop_price_updates()
         self.thread.start()
 
-    def download_and_draw(self):
+    def download_and_run(self):
+        """Скачивает данные и запускает стратегию."""
         symbol = self.symbol_input.currentText()
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
         self.bar.setFormat("Загрузка")
 
-        self.thread = DataDownloadThread(symbol, interval, limit)
-        self.thread.progress_changed.connect(self.on_progress_changed) 
-        self.thread.data_downloaded.connect(self.on_data_downloaded_draw_it)
-        self.thread.show_toast.connect(self.show_toast)
-        self.stop_price_updates()
-        self.thread.start()  # Запускаем поток
+        self.setup_download_thread(symbol, interval, limit, mode=0, on_data_downloaded=self.on_data_downloaded_run_it)
+
+    def download_and_save(self):
+        """Скачивает данные и сохраняет их."""
+        symbol = self.symbol_input.currentText()
+        interval = self.interval_input.currentText()
+        limit = self.limit_input.value()
+
+        self.setup_download_thread(symbol, interval, limit, mode=0, on_data_downloaded=self.on_data_downloaded_save_it)
+
+    def download_and_draw(self):
+        """Скачивает данные и отображает их на графике."""
+        symbol = self.symbol_input.currentText()
+        interval = self.interval_input.currentText()
+        limit = self.limit_input.value()
+        self.bar.setFormat("Загрузка")
+
+        self.setup_download_thread(symbol, interval, limit, mode=0, on_data_downloaded=self.on_data_downloaded_draw_it)
 
     def on_progress_changed(self, value):
-        # Обновляем значение прогресс-бара
+        """Обновляет значение прогресс-бара."""
         self.bar.setValue(value)
 
     def on_data_downloaded_run_it(self, data):
-        # Метод, который будет вызван после завершения скачивания
+        """Обрабатывает данные после завершения скачивания для запуска стратегии."""
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.data_downloaded.disconnect(self.on_data_downloaded_run_it)
         self.thread.show_toast.disconnect(self.show_toast)
@@ -621,18 +667,19 @@ class CryptoTradingApp(QWidget):
         self.run_strategy()
 
     def on_data_downloaded_save_it(self, data):
-        # Метод, который будет вызван после завершения скачивания
+        """Обрабатывает данные после завершения скачивания для сохранения."""
         self.df = data
         self.file_handler.save_candlesticks()
         self.start_price_updates()
     
     def on_data_downloaded_draw_it(self, data):
-        # Метод, который будет вызван после завершения скачивания
+        """Обрабатывает данные после завершения скачивания для отображения на графике."""
         self.df = data
         print(self.df)
         self.plot(self.df, [], [], [])
 
     def run_strategy(self):
+        """Запускает выбранную стратегию."""
         self.bar.setFormat("Тестирование")
 
         self.thread = self.strategy_manager
@@ -646,7 +693,6 @@ class CryptoTradingApp(QWidget):
         self.thread.strat_name = self.strat_input.currentText()
         current_strategy = self.strategy_manager.strategy_dict.get(self.strat_input.currentText())
     
-        # Update trading status window with current strategy
         if hasattr(self, 'trading_status_window'):
             self.trading_status_window.update_strategy(current_strategy)
         self.thread.commission = self.commission
@@ -661,6 +707,7 @@ class CryptoTradingApp(QWidget):
         self.thread.run() 
     
     def on_calculation_complete(self, positions, balance, indicators):
+        """Обрабатывает завершение расчета стратегии."""
         self.positions = positions
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.calculation_complete.disconnect(self.on_calculation_complete)
@@ -678,11 +725,11 @@ class CryptoTradingApp(QWidget):
             min_margin=0
         )
 
-        # Update statistics if available
         stats = self.calculate_detailed_statistics()
         self.trading_status_window.update_statistics(stats)
 
     def on_calculation_complete_on_trade(self, positions, balance, indicators):
+        """Обрабатывает завершение расчета стратегии во время торговли."""
         self.positions = self.trading_sync_manager.compare_positions(positions, self.positions)
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.calculation_complete.disconnect(self.on_calculation_complete_on_trade)
@@ -692,6 +739,7 @@ class CryptoTradingApp(QWidget):
 
 
     def train_model(self):
+        """Обучает модель ИИ."""
         self.bar.setFormat("Обучение")
 
         if self.file_handler.load_candlesticks():
@@ -705,6 +753,7 @@ class CryptoTradingApp(QWidget):
             self.thread.run() 
 
     def on_training_complete(self, model):
+        """Обрабатывает завершение обучения модели."""
         self.model = model
         self.file_handler.save_model_dialog()
         #self.thread.progress_changed.disconnect(self.on_progress_changed) 
@@ -715,10 +764,12 @@ class CryptoTradingApp(QWidget):
 # Отрисовка графиков
 
     def clear_plot(self):
+        """Очищает график."""
         self.canvas.candlestick_plot.clear()
         self.canvas.balance_plot.clear()
 
     def plot(self, df, positions, balance, indicators):
+        """Отображает данные на графике."""
         self.bar.setFormat("Отрисовка")
 
         self.canvas.candlestick_plot.clear()
@@ -742,12 +793,13 @@ class CryptoTradingApp(QWidget):
 # Внешние взаимодействия
 
     def open_positions_table(self):
+        """Открывает таблицу позиций."""
         if self.positions: 
             positions_table = PositionsWindow(self.positions, self.current_theme, self.is_trade)
             positions_table.exec_()
 
     def open_real_positions_window(self):
-        """Fetch real positions from the API and open the RealPositionsWindow."""
+        """Открывает окно реальных позиций."""
         if not self.active_api:
             QMessageBox.warning(self, "Ошибка", "API не настроен. Пожалуйста, настройте API в разделе 'Настроить API'.")
             return
@@ -759,6 +811,7 @@ class CryptoTradingApp(QWidget):
             QMessageBox.critical(self, "Ошибка", f"Не удалось открыть окно позиций. Ошибка: {str(e)}")
 
     def setup_price_updates(self):
+        """Настраивает обновление цены в реальном времени."""
         self.price_updater = PriceTimer()
         self.price_updater.new_price_signal.connect(self.update_price)
         self.price_updater.set_refresh_interval(1)
@@ -770,6 +823,7 @@ class CryptoTradingApp(QWidget):
         self.price_updater.start_updating()
 
     def update_price_symbol(self):
+        """Обновляет символ для отслеживания цены."""
         if self.price_updater:
             self.price_updater.update_symbol(self.symbol_input.currentText())
 
@@ -778,7 +832,7 @@ class CryptoTradingApp(QWidget):
         self.price_updater.stop_updating()
 
     def update_price(self, new_price):
-        """Обновление цены на основе выбранной криптовалюты"""
+        """Обновляет цену на основе выбранной криптовалюты."""
         if self.previous_price is not None:
             if new_price > self.previous_price:
                 self.price_label.setStyleSheet("color: #089981; padding: 0px; margin: 0px;")
@@ -799,16 +853,18 @@ class CryptoTradingApp(QWidget):
             self.price_label.repaint()
 
     def show_toast(self, preset, title, text):
+        """Отображает всплывающее уведомление."""
         toast = Toast(self)
-        toast.setDuration(7000)  # Hide after 5 seconds
+        toast.setDuration(7000)  
         toast.setTitle(title)
         toast.setText(text)
-        toast.applyPreset(preset)  # Apply style preset
+        toast.applyPreset(preset) 
         toast.show()
 
 # Торговля
 
     def start_trading(self):
+        """Запускает торговлю."""
         self.is_trade = True
         self.positions = None
         self.bar.setFormat("Загрузка")
@@ -822,59 +878,53 @@ class CryptoTradingApp(QWidget):
         self.update_trading_status_window()
 
     def stop_trading(self):
+        """Останавливает торговлю."""
         if self.timer:
             self.timer.stop()
             self.timer = None
         self.is_trade = False
 
-        # Update and close the trading status window
         if self.trading_status_window:
-            self.trading_status_window.update_status("Остановлено")  # Исправлено сообщение
+            self.trading_status_window.update_status("Остановлено") 
         
     def setup_logging(self, log_file='trading_log.txt'):
+        """Настраивает логирование."""
         logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(message)s')
         logger = logging.getLogger()
         return logger
 
     def log_message(self, message):
-        """Логирует сообщение с временем в 24-часовом формате до секунд."""
+        """Логирует сообщение."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Формат времени до секунд
         log_entry = f"{timestamp} - {message}"
         logging.info(log_entry)
         self.log_window.add_log_entry(log_entry)  # Добавление строки в окно логов
 
     def update_trading(self):
-        # Функция для загрузки данных и синхронизации с биржей
+        """Обновляет данные торговли и синхронизирует их с биржей."""
         symbol = self.symbol_input.currentText()
         interval = self.interval_input.currentText()
         limit = self.limit_input.value()
-        run = True
-        self.thread = DataDownloadThread(symbol, interval, limit, run)
-        self.thread.progress_changed.connect(self.on_progress_changed) 
-        self.thread.show_toast.connect(self.show_toast)
-        self.thread.data_downloaded.connect(self.on_data_downloaded_run_it)
-        self.thread.start() 
-        message = datetime.now().strftime("%I:%M:%S %p on %B %d, %Y")
-        self.log_message(message)
-        self.log_window.update_log(message)
-        self.update_trading_status_window()
+        self.bar.setFormat("Загрузка")
+
+        self.setup_download_thread(symbol, interval, limit, mode=1, on_data_downloaded=self.on_data_downloaded_run_it)
 
     def update_trading_status_window(self):
-        """Update the trading status window asynchronously."""
+        """Асинхронно обновляет окно статуса торговли."""
         if not hasattr(self, 'status_updater') or not self.status_updater:
             self.status_updater = TradingStatusUpdater(self)
             self.status_updater.update_signal.connect(self._apply_trading_status_update)
             self.status_updater.error_signal.connect(self.handle_updater_error)
         
         if not self.status_updater.isRunning():
-            self.status_updater.start()
+            self.status_updater.run()
 
     def handle_updater_error(self, error_msg):
-        """Handle errors from the status updater."""
+        """Обрабатывает ошибки обновления статуса."""
         self.show_toast(ToastPreset.ERROR, "Ошибка обновления статуса", error_msg)
 
     def _apply_trading_status_update(self, data):
-        """Apply the updates received from the worker thread."""
+        """Применяет обновления, полученные от рабочего потока."""
         self.trading_status_window.update_data(
             is_active=data["is_active"],
             current_pair=data["current_pair"],
@@ -901,7 +951,6 @@ class CryptoTradingApp(QWidget):
         else:
             self.active_api = None
 
-        # Ensure the TradingSyncManager uses the correct API credentials
         if self.active_api:
             self.trading_sync_manager.api = OKXApi(
                 api_key=self.active_api["key"],
@@ -918,7 +967,7 @@ class CryptoTradingApp(QWidget):
         self.api_manager.check_api_status(self)
 
     def toggle_trading_status_panel(self):
-        """Toggle the visibility of the trading status panel."""
+        """Переключает видимость панели статуса торговли."""
         if self.trading_status_window.isVisible():
             self.trading_status_window.hide()
             self.splitter.setSizes([1300, 0])  
@@ -938,7 +987,7 @@ class CryptoTradingApp(QWidget):
         super().closeEvent(event)
 
     def show_detailed_statistics(self):
-        """Show detailed statistics window"""
+        """Отображает окно детальной статистики."""
         if not hasattr(self, 'df') or len(self.df) == 0:
             self.show_toast(ToastPreset.ERROR, 'Ошибка', 'Нет данных для анализа')
             return
@@ -947,27 +996,25 @@ class CryptoTradingApp(QWidget):
             self.show_toast(ToastPreset.ERROR, 'Ошибка', 'Сначала запустите тестирование стратегии')
             return
 
-        # Calculate statistics
         stats = self.calculate_detailed_statistics()
         
-        # Create and show statistics window
         from lib.windows.multitask.statistics_window import StatisticsWindow
         stats_window = StatisticsWindow(stats, self.current_theme)
         stats_window.exec_()
 
     def calculate_detailed_statistics(self):
-        """Calculate detailed statistics from positions and balance data"""
+        """Вычисляет детальную статистику на основе данных позиций и баланса."""
         winning_trades = [p for p in self.positions if p['pnl'] > 0]
         losing_trades = [p for p in self.positions if p['pnl'] <= 0]
         
-        # Add positions data for plotting
+
         positions_data = []
         for pos in self.positions:
-            if pos['status'] == 'closed':  # Only include closed positions
+            if pos['status'] == 'closed':  
                 positions_data.append((
-                    pos['closeTimestamp'],  # timestamp
-                    float(pos['pnl']),      # PnL value
-                    float(pos['pnl']) > 0   # is profit boolean
+                    pos['closeTimestamp'], 
+                    float(pos['pnl']),      
+                    float(pos['pnl']) > 0 
                 ))
         
         stats = {
@@ -988,7 +1035,7 @@ class CryptoTradingApp(QWidget):
             'total_days': (self.df.index[-1] - self.df.index[0]).days,
             'avg_holding_time': self.calculate_avg_holding_time(),
             'positions_data': positions_data,
-            # Add strategy settings
+
             'strategy_name': self.strat_input.currentText(),
             'commission': self.commission,
             'initial_balance': self.initial_balance,
@@ -1002,6 +1049,7 @@ class CryptoTradingApp(QWidget):
         return stats
 
     def calculate_sharpe_ratio(self):
+        """Вычисляет коэффициент Шарпа на основе позиций."""
         """Calculate Sharpe Ratio from positions"""
         if not self.positions:
             return 0
@@ -1016,7 +1064,7 @@ class CryptoTradingApp(QWidget):
         return mean_return / std_dev if std_dev != 0 else 0
 
     def calculate_avg_holding_time(self):
-        """Calculate average holding time for positions"""
+        """Вычисляет среднее время удержания позиций."""
         if not self.positions:
             return "0h"
             
@@ -1027,10 +1075,27 @@ class CryptoTradingApp(QWidget):
         return f"{round(avg_hours, 1)}h"
 
     def show_optimization_dialog(self):
-        """Open parameter optimization in new tab"""
+        """Открывает окно оптимизации параметров."""
         from lib.windows.parameter_optimization_window import ParameterOptimizationWindow
         optimizer = ParameterOptimizationWindow(self.strategy_manager, parent=self)
         self.add_tab_signal.emit(optimizer, "Оптимизация параметров")
+
+    def open_data_source_window(self):
+        """Открывает окно выбора источника данных."""
+        dialog = DataSourceWindow(self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.data_source = dialog.selected_source
+            self.update_data_loader()
+            self.settings.setValue("data_source", self.data_source)
+
+    def update_data_loader(self):
+        """Обновляет класс загрузчика данных на основе выбранного источника."""
+        if self.data_source == "OKX":
+            self.data_loader = DataDownloadThread
+        elif self.data_source == "Binance":
+            self.data_loader = BinanceAPI()
+        elif self.data_source == "Bybit":
+            self.data_loader = BybitAPI()
 
 
 

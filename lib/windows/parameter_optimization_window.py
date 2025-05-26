@@ -142,7 +142,10 @@ class ParameterOptimizationWindow(QWidget):
 
     def on_tab_changed(self, index):
         """Handle tab changes to show appropriate right panel"""
-        self.right_stack.setCurrentIndex(index)
+        if hasattr(self, 'right_stack'):  # Check if right_stack exists
+            self.right_stack.setCurrentIndex(index)
+        else:
+            raise AttributeError("The 'right_stack' attribute is not initialized.")
 
     def create_direct_optimization_tab(self):
         """Create tab for direct optimization method"""

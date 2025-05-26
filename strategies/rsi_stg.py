@@ -1,4 +1,4 @@
-from .base_strategy import BaseStrategy
+from lib.strategies.base_strategy import BaseStrategy  # Changed to absolute import
 import ta
 
 class RSI_Strategy(BaseStrategy):

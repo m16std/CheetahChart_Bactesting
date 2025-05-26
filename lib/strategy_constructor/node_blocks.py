@@ -1,5 +1,6 @@
 from NodeGraphQt import BaseNode
 from ..strategy_constructor.blocks import BLOCK_REGISTRY
+from NodeGraphQt.constants import NodePropWidgetEnum
 
 class StrategyNode(BaseNode):
     NODE_NAME = None  # Will be set by derived classes
@@ -19,36 +20,46 @@ class StrategyNode(BaseNode):
         if not block_def:
             raise KeyError(f"Block type '{self.block_type}' not found in registry")
 
-        # Add ports and set name
         for input_name in block_def.get_inputs():
             self.add_input(input_name)
         for output_name in block_def.get_outputs():
             self.add_output(output_name)
         self.set_name(self.block_type)
         
-        if self.block_type == 'Константа':
-            self.add_text_input('value', 'Значение')
-            
-        elif self.block_type == 'Открыть Позицию':
+
+        if self.block_type == 'Открыть Позицию':
             self.add_combo_menu('direction', 'Направление:', items=['LONG', 'SHORT'])
 
         elif self.block_type == 'Сравнение':
             self.add_combo_menu('type', 'Тип:', items=['Больше', 'Меньше', 'Равно'])
 
+        elif self.block_type == 'Константа':
+            self.add_text_input('value', 'Значение')
+            
+        elif self.block_type == 'RSI':
+            self.create_property('period', 14)
+            
+        elif self.block_type == 'BB':
+            self.create_property('period', 20)
+            self.create_property('std', 2.0)
+            
+        elif self.block_type == 'EMA':
+            self.create_property('period', 14)
+            
         self.model.color = (31, 33, 36)
         self.model.border_color = (58, 65, 68)
+
+
 
     def on_property_changed(self, prop_name, value):
         """Handle property value changes"""
         super().on_property_changed(prop_name, value)
         
-        if self.block_type == 'Constant':
-            # Обновляем выходной порт при изменении значения
+        if self.block_type == 'Константа' and prop_name == 'value':
             try:
                 float_val = float(value)
-                if 'value' in self.outputs:
-                    self.outputs['value'].value = float_val
-            except ValueError:
+                self.outputs['value'].set_value(float_val)
+            except (ValueError, KeyError):
                 pass
         
         elif self.block_type == 'Open Position':
@@ -62,3 +73,19 @@ class StrategyNode(BaseNode):
             name: self.model.get_property(name)
             for name in self.model.properties.keys()
         }
+        
+    def get_property(self, name):
+        """Get node property value safely"""
+        try:
+            return self.model.properties[name].value()
+        except:
+            return None
+
+    def get_value(self):
+        """Get node's output value"""
+        if self.block_type == 'Constant':
+            try:
+                return float(self.get_property('value'))
+            except:
+                return 0.0
+        return None

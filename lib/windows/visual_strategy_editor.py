@@ -30,30 +30,24 @@ class BlockWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Draw block body
         painter.fillRect(self.rect(), QColor("#2d2d2d"))
         painter.setPen(QPen(Qt.white))
         painter.drawText(self.rect(), Qt.AlignCenter, self.block_type)
 
-        # Draw ports
         port_size = 8
         input_spacing = self.height() / (len(self.block_def.get_inputs()) + 1)
         output_spacing = self.height() / (len(self.block_def.get_outputs()) + 1)
 
-        # Draw input ports on left side
         for i, port in enumerate(self.block_def.get_inputs(), 1):
-            y = int(i * input_spacing)  # Convert to int
+            y = int(i * input_spacing)
             painter.setBrush(Qt.white)
             painter.drawEllipse(0, y - port_size//2, port_size, port_size)
-
-        # Draw output ports on right side
         for i, port in enumerate(self.block_def.get_outputs(), 1):
-            y = int(i * output_spacing)  # Convert to int
+            y = int(i * output_spacing)
             painter.setBrush(Qt.white)
             painter.drawEllipse(self.width() - port_size, y - port_size//2, 
                               port_size, port_size)
-        
-        painter.end()  # Ensure painter is properly closed
+        painter.end()  
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -79,7 +73,6 @@ class BlockWidget(QWidget):
         if not self.drag_start_position:
             return
         
-        # Check if enough distance has been moved to start drag
         if (event.pos() - self.drag_start_position).manhattanLength() < QApplication.startDragDistance():
             return
 
@@ -144,12 +137,12 @@ class BlockWidget(QWidget):
             x = 0
             ports = self.block_def.get_inputs()
             spacing = self.height() / (len(ports) + 1)
-            idx = ports.index(port_id[3:]) + 1  # Skip 'in_' prefix
+            idx = ports.index(port_id[3:]) + 1 
         else:
             x = self.width() - port_size
             ports = self.block_def.get_outputs()
             spacing = self.height() / (len(ports) + 1)
-            idx = ports.index(port_id[4:]) + 1  # Skip 'out_' prefix
+            idx = ports.index(port_id[4:]) + 1  
             
         y = int(idx * spacing)
         return QPoint(x + port_size//2, y)
@@ -207,13 +200,13 @@ class CanvasWidget(QWidget):
         painter.strokePath(path, QPen(Qt.white, 2))
 
 class VisualStrategyEditor(QWidget):
-    theme_changed = pyqtSignal(str)  # Add signal for theme changes
+    theme_changed = pyqtSignal(str)  
 
     def __init__(self, theme="dark", parent=None):
         super().__init__(parent)
         self.current_theme = theme
         self.model = StrategyModel()
-        self.buttons = {}  # Store references to buttons
+        self.buttons = {}
         self.initUI()
         self.apply_theme(theme)
 
@@ -236,7 +229,6 @@ class VisualStrategyEditor(QWidget):
         scroll_layout.setContentsMargins(0, 0, 0, 0)
         scroll_layout.setSpacing(5)
 
-        # Create category frames
         for category, blocks in BLOCK_REGISTRY.items():
             category_frame = QFrame()
             category_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -253,21 +245,18 @@ class VisualStrategyEditor(QWidget):
             category_layout.setContentsMargins(0, 0, 0, 0)
             category_layout.setSpacing(1)
             
-            # Make header clickable
             header_frame = QFrame()
             header_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
             header_frame.setCursor(Qt.PointingHandCursor)
             header_layout = QHBoxLayout(header_frame)
             header_layout.setContentsMargins(0, 0, 0, 0)
             
-            # Category title with arrow
             title = QLabel(f"▼ {category}")
             title.setStyleSheet("font-size: 14px; font-weight: bold; color: #669FD3;")
             header_layout.addWidget(title)
             
             category_layout.addWidget(header_frame)
             
-            # Block list for category
             block_list = QListWidget()
             block_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             block_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -287,56 +276,45 @@ class VisualStrategyEditor(QWidget):
                 }
             """)
             
-            # Add items and adjust height to content
             for block_name, block_class in blocks.items():
                 item = QListWidgetItem(block_name)
                 item.setData(Qt.UserRole, block_name)
                 block_list.addItem(item)
             
-            # Calculate and set proper height
-            item_height = 30  # Height per item including padding
+            item_height = 30 
             total_height = len(blocks) * item_height
             block_list.setFixedHeight(total_height)
             
             category_layout.addWidget(block_list)
             scroll_layout.addWidget(category_frame)
-            
-            # Connect header click
+        
             header_frame.mousePressEvent = lambda e, w=block_list, t=title: self.toggle_category(w, t)
-            
-            # Connect block list double click
             block_list.itemDoubleClicked.connect(self.create_block_from_library)
 
         scroll.setWidget(self.scroll_content)
         self.splitter.addWidget(scroll)
 
-        # Node graph setup
         self.graph = NodeGraph()
         self.graph_widget = self.graph.widget
         self.splitter.addWidget(self.graph_widget)
 
-        # Register node types for each category's blocks
         for category, blocks in BLOCK_REGISTRY.items():
             for block_name, block_class in blocks.items():
-                # Create node class for this block
                 node_class = type(
-                    block_name,  # Use block name directly as class name
+                    block_name, 
                     (StrategyNode,),
                     {
                         'NODE_NAME': block_name,
                         'block_type': block_name,
-                        '__identifier__': 'examples.nodes'  # Use single namespace
+                        '__identifier__': 'examples.nodes'
                     }
                 )
-                # Register the node
                 self.graph.register_node(node_class)
 
-        # Controls panel
         controls = QVBoxLayout()
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(2)
 
-        # Create top buttons with references
         button_configs = {
             'open': ("resources/open.svg", "Open Strategy"),
             'save': ("resources/save.svg", "Save Strategy"),
@@ -345,7 +323,6 @@ class VisualStrategyEditor(QWidget):
             'settings': ("resources/settings.svg", "Settings")
         }
 
-        # Common button style
         button_style = """
             QPushButton {
                 border: none;
@@ -361,11 +338,10 @@ class VisualStrategyEditor(QWidget):
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(2)
 
-        # Create buttons
         for btn_id, (icon_path, tooltip) in button_configs.items():
             self.buttons[btn_id] = QPushButton()
             btn = self.buttons[btn_id]
-            btn.icon_path = icon_path  # Store icon path
+            btn.icon_path = icon_path  
             btn.setIcon(self.recolor_svg_icon(icon_path, Qt.gray))
             btn.setToolTip(tooltip)
             btn.setStyleSheet(button_style)
@@ -405,27 +381,22 @@ class VisualStrategyEditor(QWidget):
         """Toggle category list visibility and update arrow"""
         if widget.isVisible():
             widget.hide()
-            title_label.setText(f"▶ {title_label.text()[2:]}")  # Replace ▼ with ▶
+            title_label.setText(f"▶ {title_label.text()[2:]}") 
         else:
             widget.show()
-            title_label.setText(f"▼ {title_label.text()[2:]}")  # Replace ▶ with ▼
+            title_label.setText(f"▼ {title_label.text()[2:]}")
 
     def create_block_from_library(self, item):
         """Create a new block when double-clicking a library item"""
         block_name = item.text()
         
         try:
-            # Create node using simple node identifier
             node = self.graph.create_node(f'examples.nodes.{block_name}')
-            
-            # Position the node at cursor
             cursor_pos = self.graph_widget.mapFromGlobal(QCursor.pos())
             try:
-                # First try new API
                 node.set_pos(cursor_pos.x(), cursor_pos.y())
             except (AttributeError, TypeError):
                 try:
-                    # Then try older API
                     node.setPos(cursor_pos.x(), cursor_pos.y())
                 except (AttributeError, TypeError):
                     print(f"Warning: Could not position node {block_name}")
@@ -459,20 +430,19 @@ class VisualStrategyEditor(QWidget):
                             'to_port': port.name()
                         })
 
-        # Generate code using connections
         generator = CodeGenerator(self.model)
         code = generator.generate_from_graph(nodes, connections)
         print(code)
 
     def apply_theme(self, theme):
-        """Apply theme to all visual components"""
+        """Apply theme to all visual components, including NodeGraphQt."""
         self.current_theme = theme
         icon_color = Qt.white if theme == "dark" else Qt.black
         background_color = "#151924" if theme == "dark" else "#ffffff"
         text_color = "#ffffff" if theme == "dark" else "#000000"
         hover_color = "rgba(255, 255, 255, 0.1)" if theme == "dark" else "rgba(0, 0, 0, 0.1)"
+        graph_border_color = "#ffffff" if theme == "light" else Qt.black
 
-        # Update button style
         button_style = f"""
             QPushButton {{
                 border: none;
@@ -484,13 +454,11 @@ class VisualStrategyEditor(QWidget):
             }}
         """
 
-        # Update icons and style for all buttons
         for btn in self.buttons.values():
             if hasattr(btn, 'icon_path'):
                 btn.setIcon(self.recolor_svg_icon(btn.icon_path, icon_color))
             btn.setStyleSheet(button_style)
 
-        # Update category frames style
         category_frame_style = f"""
             QFrame {{
                 background-color: {background_color};
@@ -499,7 +467,6 @@ class VisualStrategyEditor(QWidget):
             }}
         """
 
-        # Update list widget style
         list_style = f"""
             QListWidget {{
                 background: transparent;
@@ -516,13 +483,27 @@ class VisualStrategyEditor(QWidget):
             }}
         """
 
-        # Apply styles to all category frames
         for i in range(self.scroll_content.layout().count()):
             widget = self.scroll_content.layout().itemAt(i).widget()
             if isinstance(widget, QFrame):
                 widget.setStyleSheet(category_frame_style)
-                # Update list widget style in the frame
                 for child in widget.findChildren(QListWidget):
                     child.setStyleSheet(list_style)
 
-        self.theme_changed.emit(theme)  # Emit theme change signal
+
+        if theme == "dark":
+            self.graph.set_background_color(21, 25, 36) 
+            self.graph.set_grid_color(50, 50, 50)       
+        else:
+            self.graph.set_background_color(255, 255, 255)
+            self.graph.set_grid_color(200, 200, 200)    
+            self.graph_widget.setStyleSheet(f"""
+                QFrame {{
+                    border: 2px solid {graph_border_color};
+                    border-radius: 4px;
+                }}
+            """)
+
+            self.theme_changed.emit(theme)  
+
+        self.theme_changed.emit(theme) 

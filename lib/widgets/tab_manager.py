@@ -222,12 +222,12 @@ class TabManager(QTabWidget):
                 optimizer = ParameterOptimizationWindow(trading_tab.strategy_manager, parent=trading_tab, theme=self.widget(0).current_theme)
                 self.add_new_tab(optimizer, "Оптимизация параметров")
             else:
-                self.show_toast(ToastPreset.ERROR, "Ошибка", "Сначала создайте вкладку тестирования")
+                self.show_toast('error', "Ошибка", "Сначала создайте вкладку тестирования")
         elif tab_type == "code":
             editor = PythonEditorWindow("", theme=self.widget(0).current_theme)
             self.add_new_tab(editor, "Новый скрипт")
         elif tab_type == "visual":
-            visual_editor = VisualStrategyEditor()
+            visual_editor = VisualStrategyEditor(theme=self.widget(0).current_theme)
             self.add_new_tab(visual_editor, "Конструктор стратегий")
         
         return None

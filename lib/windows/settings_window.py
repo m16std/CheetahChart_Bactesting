@@ -1,5 +1,7 @@
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, 
-                           QComboBox, QMessageBox, QSpinBox, QTabWidget, QWidget)
+                           QComboBox, QMessageBox, QSpinBox, QTabWidget, QWidget, QFrame, QHBoxLayout)
+from PyQt5.QtCore import Qt
+from lib.windows.api_settings_window import APISettingsWindow  # Добавляем импорт
 
 class SettingsWindow(QDialog):
     def __init__(self, settings, parent=None):
@@ -8,38 +10,52 @@ class SettingsWindow(QDialog):
         self.setWindowTitle("Настройки")
         self.setMinimumWidth(400)
 
-        layout = QVBoxLayout()
+        # Основной макет окна
+        main_layout = QVBoxLayout()
+        self.setLayout(main_layout)
 
         # Создаем TabWidget
         self.tab_widget = QTabWidget()
-        
+        main_layout.addWidget(self.tab_widget)
+
+        # Создаем и инициализируем вкладки
+        self.init_tabs()
+
+        # Кнопка сохранения
+        save_button = QPushButton("Сохранить")
+        save_button.clicked.connect(self.validate_fields)
+        main_layout.addWidget(save_button)
+
+        self.load_settings()
+
+    def init_tabs(self):
+        """Инициализация всех вкладок"""
         # Создаем вкладки
         self.testing_tab = QWidget()
         self.trading_tab = QWidget()
-        
+        self.data_source_tab = QWidget()
+        self.api_settings_tab = QWidget()
+
+        # Создаем макеты для каждой вкладки
+        testing_layout = QVBoxLayout(self.testing_tab)
+        trading_layout = QVBoxLayout(self.trading_tab)
+        data_source_layout = QVBoxLayout(self.data_source_tab)
+        api_settings_layout = QVBoxLayout(self.api_settings_tab)
+
         # Добавляем вкладки в TabWidget
         self.tab_widget.addTab(self.testing_tab, "Тестирование")
         self.tab_widget.addTab(self.trading_tab, "Торговля")
+        self.tab_widget.addTab(self.data_source_tab, "Источники данных")
+        self.tab_widget.addTab(self.api_settings_tab, "Настройки API")
 
-        # Инициализируем элементы управления для тестирования
-        self.init_testing_tab()
-        
-        # Инициализируем элементы управления для торговли
-        self.init_trading_tab()
+        # Инициализируем содержимое вкладок
+        self.init_testing_tab(testing_layout)
+        self.init_trading_tab(trading_layout)
+        self.init_data_source_tab(data_source_layout)
+        self.init_api_settings_tab(api_settings_layout)
 
-        layout.addWidget(self.tab_widget)
-
-        save_button = QPushButton("Сохранить")
-        save_button.clicked.connect(self.validate_fields)
-        layout.addWidget(save_button)
-
-        self.setLayout(layout)
-        self.load_settings()
-
-    def init_testing_tab(self):
-        layout = QVBoxLayout()
-
-        # Настройки для тестирования
+    def init_testing_tab(self, layout):
+        """Инициализация вкладки тестирования"""
         self.commission_input = QLineEdit()
         self.initial_balance_input = QLineEdit()
         self.leverage_input = QLineEdit()
@@ -53,25 +69,33 @@ class SettingsWindow(QDialog):
 
         self.position_size_label = QLabel("Размер позиции (% от баланса)")
 
-        layout.addWidget(QLabel("Торговая комиссия"))
-        layout.addWidget(self.commission_input)
-        layout.addWidget(QLabel("Начальный баланс (USDT)"))
-        layout.addWidget(self.initial_balance_input)
-        layout.addWidget(QLabel("Торговое плечо"))
-        layout.addWidget(self.leverage_input)
-        layout.addWidget(QLabel("Профит фактор"))
-        layout.addWidget(self.profit_factor_input)
-        layout.addWidget(QLabel("Тип размера позиции"))
-        layout.addWidget(self.position_type_combo)
-        layout.addWidget(self.position_size_label)
-        layout.addWidget(self.position_size_input)
+        layout.setSpacing(2)  # Уменьшаем расстояние между элементами
+        layout.setAlignment(Qt.AlignTop)  # Выравнивание по верхнему краю
 
-        self.testing_tab.setLayout(layout)
+        # Группируем поля и их подписи
+        for label_text, widget in [
+            ("Торговая комиссия", self.commission_input),
+            ("Начальный баланс (USDT)", self.initial_balance_input),
+            ("Торговое плечо", self.leverage_input),
+            ("Профит фактор", self.profit_factor_input),
+            ("Тип размера позиции", self.position_type_combo),
+            (None, self.position_size_label),  # None означает, что метка уже существует
+            (None, self.position_size_input)
+        ]:
+            field_layout = QVBoxLayout()
+            field_layout.setSpacing(1)  # Минимальный отступ между меткой и полем
+            if label_text:  # Если есть текст метки
+                label = QLabel(label_text)
+                field_layout.addWidget(label) 
+                field_layout.addWidget(widget) 
+            else:  # Для существующих меток
+                field_layout.addWidget(widget)
+            
+            layout.addLayout(field_layout)
+            layout.addSpacing(5)  # Отступ между группами полей
 
-    def init_trading_tab(self):
-        layout = QVBoxLayout()
-
-        # Создаем все элементы управления в начале
+    def init_trading_tab(self, layout):
+        """Инициализация вкладки торговли"""
         self.refresh_interval_input = QSpinBox()
         self.refresh_interval_input.setMinimum(5)
         self.refresh_interval_input.setMaximum(900)
@@ -89,19 +113,56 @@ class SettingsWindow(QDialog):
 
         self.trade_position_size_label = QLabel("Размер позиции (% от баланса)")
 
-        layout.addWidget(QLabel("Торговое плечо"))
-        layout.addWidget(self.trade_leverage_input)
-        layout.addWidget(QLabel("Профит фактор"))
-        layout.addWidget(self.trade_profit_factor_input)
-        layout.addWidget(QLabel("Тип размера позиции"))
-        layout.addWidget(self.trade_position_type_combo)
-        layout.addWidget(self.trade_position_size_label)
-        layout.addWidget(self.trade_position_size_input)
+        layout.setSpacing(2)
+        layout.setAlignment(Qt.AlignTop)
 
-        layout.addWidget(QLabel("Интервал обновления (сек):"))
-        layout.addWidget(self.refresh_interval_input)
+        for label_text, widget in [
+            ("Торговое плечо", self.trade_leverage_input),
+            ("Профит фактор", self.trade_profit_factor_input),
+            ("Тип размера позиции", self.trade_position_type_combo),
+            (None, self.trade_position_size_label),
+            (None, self.trade_position_size_input),
+            ("Интервал обновления (сек):", self.refresh_interval_input)
+        ]:
+            field_layout = QVBoxLayout()
+            field_layout.setSpacing(1)
+            if label_text:
+                label = QLabel(label_text)
+                field_layout.addWidget(label)  # Сначала добавляем метку
+                field_layout.addWidget(widget)  # Затем поле ввода
+            else:
+                field_layout.addWidget(widget)
+            
+            layout.addLayout(field_layout)
+            layout.addSpacing(5)
 
-        self.trading_tab.setLayout(layout)
+    def init_data_source_tab(self, layout):
+        """Инициализация вкладки выбора источника данных"""
+        self.data_source_combo = QComboBox()
+        self.data_source_combo.addItems(["OKX", "Binance", "Bybit"])
+
+        layout.setAlignment(Qt.AlignTop)
+        layout.setSpacing(2)
+
+        field_layout = QVBoxLayout()
+        field_layout.setSpacing(1)
+        field_layout.addWidget(QLabel("Выберите источник данных:"))  # Сначала метка
+        field_layout.addWidget(self.data_source_combo)  # Затем комбобокс
+        layout.addLayout(field_layout)
+
+    def init_api_settings_tab(self, layout):
+        """Инициализация вкладки настройки API"""
+        # Создаем экземпляр окна настроек API
+        api_settings = APISettingsWindow()
+        
+        # Добавляем его содержимое в наш layout
+        layout.addWidget(api_settings)
+        
+        # Удаляем заголовок и рамку окна, так как оно встроено
+        api_settings.setWindowFlags(Qt.Widget)
+        
+        # Сохраняем ссылку на окно настроек API
+        self.api_settings = api_settings
 
     def update_position_size_label(self):
         # Меняем единицы измерения в зависимости от выбранной вариации
@@ -139,6 +200,9 @@ class SettingsWindow(QDialog):
             self.position_type_combo.setCurrentIndex(0)
         else:
             self.position_type_combo.setCurrentIndex(1)
+
+        # Загрузка настроек для вкладки источников данных
+        self.data_source_combo.setCurrentText(self.settings.value("data_source", "OKX"))
 
     def save_settings(self):
         try:
@@ -179,6 +243,15 @@ class SettingsWindow(QDialog):
             self.settings.setValue("trade_position_type", 
                                 "percent" if self.trade_position_type_combo.currentIndex() == 0 else "fixed")
             self.settings.setValue("refresh_interval", str(self.refresh_interval_input.value()))
+
+            # Сохранение настроек для вкладки источников данных
+            self.settings.setValue("data_source", self.data_source_combo.currentText())
+
+            # Сохранение настроек для вкладки API
+            self.settings.setValue("api_name", self.api_name_input.text())
+            self.settings.setValue("api_key", self.api_key_input.text())
+            self.settings.setValue("api_secret", self.api_secret_input.text())
+            self.settings.setValue("api_passphrase", self.api_passphrase_input.text())
 
             self.accept()
             

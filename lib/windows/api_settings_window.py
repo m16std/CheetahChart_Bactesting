@@ -9,52 +9,84 @@ class APISettingsWindow(QDialog):
         self.setMinimumWidth(300)
         self.settings = QSettings("MyApp", "MyCompany")
         self.layout = QVBoxLayout()
-        self.layout.setSpacing(5)
+        self.layout.setSpacing(2)  # Уменьшаем отступы между элементами
+        self.layout.setAlignment(Qt.AlignTop)  # Выравнивание по верхнему краю
 
         self.api_list_combo = QComboBox()
         self.load_api_list()
-        self.layout.addWidget(QLabel("Выберите API:"))
-        self.layout.addWidget(self.api_list_combo)
 
         # Добавляем горизонтальную линию
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
-        self.layout.addWidget(separator)
 
         # Надпись "Добавление нового API" с выравниванием по центру
         add_api_label = QLabel("Добавление нового API")
         add_api_label.setAlignment(Qt.AlignCenter)
-        self.layout.addWidget(add_api_label)
 
         self.api_name_input = QLineEdit()
-        self.layout.addWidget(QLabel("Имя API:"))
-        self.layout.addWidget(self.api_name_input)
+
+        # Поле выбора биржи
+        self.exchange_combo = QComboBox()
+        self.exchange_combo.addItems(["OKX", "Binance", "Bybit"])  # Add more exchanges as needed
 
         # Поле API Key с кнопкой показа/скрытия символов
         self.api_key_input = QLineEdit()
         self.api_key_input.setEchoMode(QLineEdit.Password)
-        self.layout.addWidget(QLabel("API Key:"))
-        self.layout.addLayout(self._create_password_field(self.api_key_input))
 
         # Поле API Secret с кнопкой показа/скрытия символов
         self.api_secret_input = QLineEdit()
         self.api_secret_input.setEchoMode(QLineEdit.Password)
-        self.layout.addWidget(QLabel("API Secret:"))
-        self.layout.addLayout(self._create_password_field(self.api_secret_input))
 
         # Поле Passphrase с кнопкой показа/скрытия символов
         self.passphrase_input = QLineEdit()
         self.passphrase_input.setEchoMode(QLineEdit.Password)
-        self.layout.addWidget(QLabel("Passphrase:"))
-        self.layout.addLayout(self._create_password_field(self.passphrase_input))
 
         save_button = QPushButton("Сохранить")
         save_button.clicked.connect(self.save_api)
-        self.layout.addWidget(save_button)
 
         delete_button = QPushButton("Удалить выбранный API")
         delete_button.clicked.connect(self.delete_api)
+
+        # Группируем поля и их подписи
+        for label_text, widget in [
+            ("Выберите API:", self.api_list_combo),
+            (None, separator),  # Разделитель
+            (None, add_api_label),  # Заголовок "Добавление нового API"
+            ("Имя API:", self.api_name_input),
+            ("Биржа:", self.exchange_combo),
+            ("API Key:", self.api_key_input),
+            ("API Secret:", self.api_secret_input),
+            ("Passphrase:", self.passphrase_input)
+        ]:
+            if widget == separator:
+                self.layout.addWidget(widget)
+                self.layout.addSpacing(5)
+                continue
+            
+            if widget == add_api_label:
+                self.layout.addWidget(widget)
+                self.layout.addSpacing(5)
+                continue
+
+            field_layout = QVBoxLayout()
+            field_layout.setSpacing(1)  # Минимальный отступ между меткой и полем
+            
+            if label_text:  # Если есть текст метки
+                label = QLabel(label_text)
+                field_layout.addWidget(label)
+                if isinstance(widget, QLineEdit):  # Если это поле для пароля
+                    field_layout.addLayout(self._create_password_field(widget))
+                else:
+                    field_layout.addWidget(widget)
+            else:
+                field_layout.addWidget(widget)
+            
+            self.layout.addLayout(field_layout)
+            self.layout.addSpacing(5)  # Отступ между группами полей
+
+        # Добавляем кнопки
+        self.layout.addWidget(save_button)
         self.layout.addWidget(delete_button)
 
         self.setLayout(self.layout)
@@ -107,6 +139,7 @@ class APISettingsWindow(QDialog):
             self.api_key_input.setText(self.settings.value(f"{selected_api}_key", ""))
             self.api_secret_input.setText(self.settings.value(f"{selected_api}_secret", ""))
             self.passphrase_input.setText(self.settings.value(f"{selected_api}_passphrase", ""))
+            self.exchange_combo.setCurrentText(self.settings.value(f"{selected_api}_exchange", "OKX"))
             self.settings.setValue("active_api", selected_api)
 
     def save_api(self):
@@ -118,6 +151,7 @@ class APISettingsWindow(QDialog):
         self.settings.setValue(f"{api_name}_key", self.api_key_input.text())
         self.settings.setValue(f"{api_name}_secret", self.api_secret_input.text())
         self.settings.setValue(f"{api_name}_passphrase", self.passphrase_input.text())
+        self.settings.setValue(f"{api_name}_exchange", self.exchange_combo.currentText())
 
         api_list = self.settings.value("api_list", [])
         if not api_list:
@@ -139,6 +173,7 @@ class APISettingsWindow(QDialog):
         self.settings.remove(f"{api_name}_key")
         self.settings.remove(f"{api_name}_secret")
         self.settings.remove(f"{api_name}_passphrase")
+        self.settings.remove(f"{api_name}_exchange")
 
         api_list = self.settings.value("api_list", [])
         if api_name in api_list:
