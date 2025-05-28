@@ -1,13 +1,14 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QScrollArea, QWidget
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHeaderView, QHBoxLayout, QLabel, QFrame, QScrollArea, QWidget, QTableWidget, QTableWidgetItem
 from PyQt5.QtCore import Qt
-import pyqtgraph as pg
-import numpy as np
+from PyQt5.QtGui import QColor
 
 class StatisticsWindow(QDialog):
-    def __init__(self, stats_data, theme="dark", parent=None):
+    def __init__(self, stats_data, theme="dark", parent=None, font_size=12):  # Добавлен параметр font_size
         super().__init__(parent)
         self.stats_data = stats_data  # Сохраняем данные
         self.current_theme = theme    # Сохраняем текущую тему
+        self.font_size = str(font_size)
+        self.title_size = str(int(font_size + 2))  
         self.setWindowTitle('Detailed Statistics')
         self.setMinimumWidth(300)
         self.setMinimumHeight(400)
@@ -23,94 +24,6 @@ class StatisticsWindow(QDialog):
         scroll_layout = QVBoxLayout(scroll_content)
         scroll_layout.setContentsMargins(0, 0, 9, 0)
         scroll_layout.setSpacing(2)
-
-        # Always create Plot Frame regardless of data
-        plot_frame = QFrame()
-        plot_frame.setFrameShape(QFrame.StyledPanel)
-        if theme == "dark":
-            plot_frame.setStyleSheet("""
-            QFrame {
-                background-color: rgba(255, 255, 255, 0.05);
-                border-radius: 8px;
-                padding: 2px;
-                margin: 0px;
-            }
-        """)
-        else:
-            plot_frame.setStyleSheet("""
-            QFrame {
-                background-color: rgba(0, 0, 0, 0.0);
-                border-radius: 8px;
-                padding: 2px;
-                margin: 0px;
-            }
-        """)
-        plot_layout = QVBoxLayout(plot_frame)
-        plot_layout.setContentsMargins(0, 0, 0, 0)
-        plot_layout.setSpacing(2)
-        
-        
-        # Title for plot section
-        plot_title = QLabel("PnL History")
-        plot_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #669FD3; padding: 3px;background-color: rgba(0, 0, 0, 0.05);")
-        plot_layout.addWidget(plot_title)
-        
-        # Create plot widget with fixed height
-        plot_widget = pg.PlotWidget()
-        plot_widget.setBackground(None)
-        plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        plot_widget.setMouseEnabled(x=True, y=True)
-        plot_widget.setMenuEnabled(False)
-        
-        # Style axis
-        styles = {'color': '#669FD3' if theme == "dark" else '#000000'}
-        plot_widget.getAxis('left').setTextPen(styles['color'])
-        plot_widget.getAxis('bottom').setTextPen(styles['color'])
-        #plot_widget.setLabel('left', 'PnL', units='USDT', **styles)
-        #plot_widget.setLabel('bottom', 'Trade #', **styles)
-        
-        # Only try to plot data if it exists
-        if 'positions_data' in stats_data and stats_data['positions_data']:
-            try:
-                # Split data into profits and losses
-                profits = [(i, pnl) for i, (_, pnl, is_profit) in enumerate(stats_data['positions_data']) if is_profit]
-                losses = [(i, pnl) for i, (_, pnl, is_profit) in enumerate(stats_data['positions_data']) if not is_profit]
-                
-                # Plot profits
-                if profits:
-                    x_profit, y_profit = zip(*profits)
-                    plot_widget.plot(x_profit, y_profit, 
-                                   pen=None, symbol='o',
-                                   symbolPen=None,
-                                   symbolBrush=(70, 175, 80, 200),
-                                   symbolSize=6)
-                
-                # Plot losses
-                if losses:
-                    x_loss, y_loss = zip(*losses)
-                    plot_widget.plot(x_loss, y_loss,
-                                   pen=None, symbol='o',
-                                   symbolPen=None,
-                                   symbolBrush=(242, 54, 69, 200),
-                                   symbolSize=6)
-                    
-                # Set Y axis range with some padding
-                all_pnls = [pnl for _, pnl, _ in stats_data['positions_data']]
-                if all_pnls:
-                    y_min, y_max = min(all_pnls), max(all_pnls)
-                    padding = (y_max - y_min) * 0.1
-                    plot_widget.setYRange(y_min - padding, y_max + padding)
-                    
-            except Exception as e:
-                print(f"Error plotting data: {e}")
-        else:
-            # Set default empty plot range
-            plot_widget.setYRange(-1, 1)
-            plot_widget.setXRange(0, 10)
-        
-        plot_widget.setFixedHeight(150)
-        plot_layout.addWidget(plot_widget)
-        scroll_layout.addWidget(plot_frame)
 
         performance_stats = {
             "Performance": {
@@ -177,7 +90,7 @@ class StatisticsWindow(QDialog):
             
             # Group title
             title = QLabel(group_name)
-            title.setStyleSheet("font-size: 14px; font-weight: bold; color: #669FD3; padding: 3px;")
+            title.setStyleSheet(f"font-size: {self.title_size}px; font-weight: bold; color: #669FD3; padding: 3px;")
             group_layout.addWidget(title)
             
             # Stats grid
@@ -187,11 +100,11 @@ class StatisticsWindow(QDialog):
                 stat_value = QLabel(str(value))
                 
                 if theme == "dark":
-                    stat_label.setStyleSheet("color: #ffffff; font-size: 12px;")
-                    stat_value.setStyleSheet("color: #669FD3; font-size: 12px;")
+                    stat_label.setStyleSheet(f"color: #ffffff; font-size: {self.font_size}px;")
+                    stat_value.setStyleSheet(f"color: #669FD3; font-size: {self.font_size}px;")
                 else:
-                    stat_label.setStyleSheet("color: #000000; font-size: 12px;background-color: rgba(0, 0, 0, 0.05);")
-                    stat_value.setStyleSheet("color: #669FD3; font-size: 12px;background-color: rgba(0, 0, 0, 0.05);")
+                    stat_label.setStyleSheet(f"color: #000000; font-size: {self.font_size}px;background-color: rgba(0, 0, 0, 0.05);")
+                    stat_value.setStyleSheet(f"color: #669FD3; font-size: {self.font_size}px;background-color: rgba(0, 0, 0, 0.05);")
                 
                 stat_layout.addWidget(stat_label)
                 stat_layout.addStretch()
@@ -201,5 +114,102 @@ class StatisticsWindow(QDialog):
             
             scroll_layout.addWidget(group_frame)
         
+        positions_frame = QFrame()
+        if theme == "dark":
+            positions_frame.setStyleSheet("""
+                QFrame {
+                    background-color: rgba(255, 255, 255, 0.05);
+                    border-radius: 8px;
+                    padding: 3px;
+                }
+            """)
+        else:
+            positions_frame.setStyleSheet("""
+                QFrame {
+                    background-color: rgba(0, 0, 0, 0.00);
+                    border-radius: 8px;
+                    padding: 3px;
+                }
+            """)
+
+        positions_layout = QVBoxLayout(positions_frame)
+        positions_layout.setContentsMargins(0, 0, 0, 0)
+        positions_layout.setSpacing(2)
+
+        # Заголовок таблицы
+        title = QLabel("Positions")
+        title.setStyleSheet(f"font-size: {self.title_size}px; font-weight: bold; color: #669FD3; padding: 3px;")
+        positions_layout.addWidget(title)
+
+        # Таблица позиций
+        positions_table = QTableWidget()
+        positions_table.setColumnCount(4)
+        positions_table.setHorizontalHeaderLabels(["Side", "Open", "Close", "PnL"])
+        positions_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        positions_table.setMinimumHeight(300)
+        #positions_table.setMaxVisibleRows(15) 
+        
+        # Настраиваем политику прокрутки
+        positions_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        
+        # Настройка стиля таблицы
+        if self.current_theme == "dark":
+            positions_table.setStyleSheet("""
+                QTableWidget {
+                    gridline-color: #2d2d2d;
+                    background-color: transparent;
+                    border: 1px solid #2d2d2d;
+                }
+                QTableWidget::item {
+                    padding: 5px;
+                    font-size: {self.font_size}px;
+                }
+                QHeaderView::section {
+                    background-color: #202020;
+                    padding: 5px;
+                    border: 1px solid #2d2d2d;
+                }
+            """)
+        else:
+            positions_table.setStyleSheet("""
+                QTableWidget {
+                    gridline-color: #d0d0d0;
+                    background-color: transparent;
+                    border: 1px solid #d0d0d0;
+                }
+                QTableWidget::item {
+                    padding: 5px;
+                }
+                QHeaderView::section {
+                    background-color: #f0f0f0;
+                    padding: 5px;
+                    border: 1px solid #d0d0d0;
+                }
+            """)
+
+        # Заполняем таблицу данными
+        if 'positions_data' in stats_data:
+            positions = stats_data.get('positions_data', [])
+            positions_table.setRowCount(len(positions))
+            for row, (close_time, pnl, is_profit) in enumerate(positions):             
+                # Направление сделки (определяем по PnL)
+                side_item = QTableWidgetItem("LONG" if pnl > 0 else "SHORT")
+                side_item.setForeground(QColor('#089981') if pnl > 0 else QColor('#F23645'))
+                positions_table.setItem(row, 0, side_item)
+                
+                # Время закрытия
+                positions_table.setItem(row, 1, QTableWidgetItem(str(close_time)))
+                positions_table.setItem(row, 2, QTableWidgetItem(str(close_time)))
+                
+                # PnL с цветом
+                pnl_item = QTableWidgetItem(f"{pnl:.2f}")
+                pnl_item.setForeground(QColor('#089981') if pnl > 0 else QColor('#F23645'))
+                positions_table.setItem(row, 3, pnl_item)
+
+        positions_layout.addWidget(positions_table)
+        scroll_layout.addWidget(positions_frame)
+        
         scroll.setWidget(scroll_content)
         main_layout.addWidget(scroll)
+

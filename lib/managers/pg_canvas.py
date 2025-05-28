@@ -1,51 +1,37 @@
 from PyQt5 import QtCore, QtWidgets, QtGui
 import pyqtgraph as pg
-from pyqtgraph import TextItem, PlotDataItem, mkPen, mkBrush
+from pyqtgraph import TextItem, PlotDataItem, mkPen, mkBrush, BarGraphItem
 from PyQt5.QtWidgets import (QGraphicsRectItem, QGridLayout, QLabel, QWidget, 
                            QFrame, QToolBar, QAction, QInputDialog, QColorDialog,
-                           QToolButton, QMenu)
+                           QToolButton, QMenu, QScrollArea, QVBoxLayout)
 from datetime import datetime as dt
 from PyQt5.QtGui import QFont, QColor, QLinearGradient, QBrush
 from PyQt5.QtCore import QMargins
 import math
+import pandas as pd
+import numpy as np
 
 class PGCanvas(QWidget):
-
     def __init__(self, facecolor, textcolor):
-        self.price_date_axis = pg.DateAxisItem(orientation='bottom')
-        self.balance_date_axis = pg.DateAxisItem(orientation='bottom')
-
-        # ----- Свечной график и индикаторы -----
-        self.candlestick_plot = pg.PlotWidget()
-        self.candlestick_plot.setAxisItems({'bottom': self.price_date_axis})
-        self.candlestick_plot.showGrid(x=True, y=True, alpha=0.3)
-        self.candlestick_plot.addLegend()
-        # ----- График баланса -----
-        self.balance_plot = pg.PlotWidget()
-        self.balance_plot.setAxisItems({'bottom': self.balance_date_axis})
-        self.balance_plot.showGrid(x=True, y=True, alpha=0.3)
-        # ----- Общая ось -----
-        self.balance_plot.setXLink(self.candlestick_plot)
-
+        super(PGCanvas, self).__init__()
+        
+        # Initialize statistics first
         self.stat_texts = [
-            "Winrate",
-            "Profit",
-            "Trades",
-            "Period",
-            "Initial balance",
-            "Final balance",
-            "Max drawdown"
+            "Winrate", "Profit", "Trades", "Period",
+            "Initial balance", "Final balance", "Max drawdown"
         ]
+        
+        self.stats = {
+            'winrate': '0%',
+            'profit': '0%',
+            'trades': '0',
+            'period': '0 days',
+            'init': '0 USDT',
+            'final': '0 USDT',
+            'drawdown': '0%'
+        }
 
-        self.stats = {'winrate': '0%', \
-            'profit': '0%', \
-            'trades': '0', \
-            'period': '0 days', \
-            'init': '0 USDT', \
-            'final': '0 USDT', \
-            'drawdown': '0%'}
-
-        # Создаем область статистики с шестью колонками
+        # Create stats layouts before using them
         self.stats_layout = QGridLayout()
         self.values_layout = QGridLayout()
         self.stats_layout.setContentsMargins(0, 0, 0, 0)
@@ -53,44 +39,102 @@ class PGCanvas(QWidget):
         self.stats_layout.setSpacing(-15)
         self.values_layout.setSpacing(-15)
 
-        self.init_statistic()
+        # Initialize date axis objects for each plot
+        price_date_axis = pg.DateAxisItem(orientation='bottom')
+        balance_date_axis = pg.DateAxisItem(orientation='bottom')
+        capital_date_axis = pg.DateAxisItem(orientation='bottom')
+        daily_income_date_axis = pg.DateAxisItem(orientation='bottom')
+        positions_axis = pg.DateAxisItem(orientation='bottom')
 
-        # Настройка стилей
-        self.init_canvas(facecolor, textcolor)
-
-        l = QtWidgets.QVBoxLayout()
-        l.addWidget(self.candlestick_plot, stretch=3)
-        l.addLayout(self.stats_layout)
-        l.addLayout(self.values_layout)
-        l.addWidget(self.balance_plot, stretch=1)
-
-        l.setContentsMargins(0, 0, 0, 0)
-        l.setSpacing(0)
-
+        # Create main widget and layout
         self.widget = QWidget()
-        self.widget.setLayout(l)
+        main_layout = QVBoxLayout(self.widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        self.drawing_mode = None
-        self.drawing_items = []
-        self.current_drawing = None
-        self.drawing_start_pos = None
+        # Create scroll area
+        scroll = QScrollArea()
+        self.scroll_content = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_content)
+        self.scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self.scroll_layout.setSpacing(0)
 
-        super(PGCanvas, self).__init__(self.widget)
+        self.candlestick_plot = pg.PlotWidget(axisItems={'bottom': price_date_axis})
+        self.candlestick_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.candlestick_plot.addLegend()
+        self.candlestick_plot.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.candlestick_plot.setMinimumHeight(600)
+        self.scroll_layout.addWidget(self.candlestick_plot)
+        self.scroll_layout.addLayout(self.stats_layout)
+        self.scroll_layout.addLayout(self.values_layout)
 
-        self.init_drawing_tools()
+        self.balance_plot = pg.PlotWidget(axisItems={'bottom': balance_date_axis})
+        self.balance_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.balance_plot.setXLink(self.candlestick_plot)
+        self.balance_plot.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.balance_plot.setMinimumHeight(200)
+        self.scroll_layout.addWidget(self.balance_plot)
+
+        self.daily_income_plot = pg.PlotWidget(title="Daily Income", axisItems={'bottom': daily_income_date_axis})
+        self.daily_income_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.daily_income_plot.setXLink(self.candlestick_plot)
+        self.daily_income_plot.setMinimumHeight(215)
+        self.scroll_layout.addWidget(self.daily_income_plot)
+
+        self.profitability_plot = pg.PlotWidget(title="Positions Profitability")
+        self.profitability_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.profitability_plot.setMinimumHeight(215)
+        self.profitability_plot.getAxis('bottom').setLabel('PnL (USDT)')
+        self.profitability_plot.getAxis('left').setLabel('Number of trades')
+        self.scroll_layout.addWidget(self.profitability_plot)
+
+        self.positions_plot = pg.PlotWidget(title="Positions PnL", axisItems={'bottom': positions_axis})
+        self.positions_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.positions_plot.setXLink(self.candlestick_plot)
+        self.positions_plot.setMinimumHeight(215)
+        self.positions_plot.getAxis('bottom').setLabel('Time')
+        self.positions_plot.getAxis('left').setLabel('PnL (USDT)')
+        self.positions_plot.setXLink(self.candlestick_plot)  # Связываем с основной осью времени
+        self.scroll_layout.addWidget(self.positions_plot)
         
-        # Добавляем панель инструментов
+        self.capital_plot = pg.PlotWidget(title="Capital Usage", axisItems={'bottom': capital_date_axis})
+        self.capital_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.capital_plot.setXLink(self.candlestick_plot)
+        self.capital_plot.setMinimumHeight(215)
+        self.scroll_layout.addWidget(self.capital_plot)
+        
+
+
+        # Setup scroll area
+        self.scroll_content.setLayout(self.scroll_layout)
+        scroll.setWidget(self.scroll_content)
+        scroll.setWidgetResizable(True)
+
+        # Add scroll area to main layout
+        main_layout.addWidget(scroll)
+
+        # Initialize UI components
+        self.init_statistic()
+        self.init_canvas(facecolor, textcolor)
+        self.init_drawing_tools()
+
+        # Add toolbar
         self.toolbar = QToolBar()
         self.init_drawing_toolbar()
-        l.addWidget(self.toolbar)
-        
-        # Инициализация переменных для рисования
+        main_layout.addWidget(self.toolbar)
+
+        # Initialize drawing variables
         self.drawing_mode = None
         self.drawing_items = []
         self.current_drawing = None
         self.drawing_start_pos = None
         self.current_color = QtGui.QColor('white')
         self.current_width = 2
+
+        # Set the main widget as the PGCanvas widget
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.widget)
 
     def get_canvas(self):
         return self.widget
@@ -105,26 +149,16 @@ class PGCanvas(QWidget):
         self.facecolor = facecolor
         
         # Устанавливаем цвета напрямую для каждого элемента графика
-        self.candlestick_plot.setBackground(facecolor)
-        self.balance_plot.setBackground(facecolor)
-        
-        # Настройка цветов осей и подписей для candlestick_plot
-        self.candlestick_plot.getAxis('left').setTextPen('gray')
-        self.candlestick_plot.getAxis('bottom').setTextPen('gray')
-        self.candlestick_plot.getAxis('left').setPen('gray')
-        self.candlestick_plot.getAxis('bottom').setPen('gray')
-        
-        # Настройка цветов осей и подписей для balance_plot
-        self.balance_plot.getAxis('left').setTextPen('gray')
-        self.balance_plot.getAxis('bottom').setTextPen('gray')
-        self.balance_plot.getAxis('left').setPen('gray')
-        self.balance_plot.getAxis('bottom').setPen('gray')
-        
-        # Настройка цвета сетки
-        self.candlestick_plot.getAxis('left').setGrid(100)
-        self.candlestick_plot.getAxis('bottom').setGrid(100)
-        self.balance_plot.getAxis('left').setGrid(100)
-        self.balance_plot.getAxis('bottom').setGrid(100)
+        for plot in [self.candlestick_plot, self.balance_plot, 
+                    self.capital_plot, self.daily_income_plot, 
+                    self.profitability_plot, self.positions_plot]:
+            plot.setBackground(facecolor)
+            plot.getAxis('left').setTextPen('gray')
+            plot.getAxis('bottom').setTextPen('gray')
+            plot.getAxis('left').setPen('gray')
+            plot.getAxis('bottom').setPen('gray')
+            plot.getAxis('left').setGrid(100)
+            plot.getAxis('bottom').setGrid(100)
         
         self.winrate_label.setStyleSheet(f"color: #089981; font: 12pt;")
         self.profit_label.setStyleSheet(f"color: #089981; font: 12pt;")
@@ -147,16 +181,32 @@ class PGCanvas(QWidget):
 
     def add_cursor_line(self):
         # ----- Курсор с линиями -----
-        self.vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
-        self.hline = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
-        self.candlestick_plot.addItem(self.vline, ignoreBounds=True)
-        self.candlestick_plot.addItem(self.hline, ignoreBounds=True)
-        self.vline_ = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
-        self.hline_ = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
-        self.balance_plot.addItem(self.vline_, ignoreBounds=True)
-        self.balance_plot.addItem(self.hline_, ignoreBounds=True)
+        self.vline1 = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.hline1 = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.candlestick_plot.addItem(self.vline1, ignoreBounds=True)
+        self.candlestick_plot.addItem(self.hline1, ignoreBounds=True)
+        self.vline2 = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.hline2 = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.balance_plot.addItem(self.vline2, ignoreBounds=True)
+        self.balance_plot.addItem(self.hline2, ignoreBounds=True)
+        self.vline3 = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.hline3 = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.capital_plot.addItem(self.vline3, ignoreBounds=True)
+        self.capital_plot.addItem(self.hline3, ignoreBounds=True)
+        self.vline4 = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.hline4 = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.daily_income_plot.addItem(self.vline4, ignoreBounds=True)
+        self.daily_income_plot.addItem(self.hline4, ignoreBounds=True)
+        self.vline5 = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.hline5 = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen("gray", style=QtCore.Qt.DotLine))
+        self.profitability_plot.addItem(self.vline5, ignoreBounds=True)
+        self.profitability_plot.addItem(self.hline5, ignoreBounds=True)
+
         self.candlestick_plot.scene().sigMouseMoved.connect(self.mouse_moved_candel)
         self.balance_plot.scene().sigMouseMoved.connect(self.mouse_moved_balance)
+        self.capital_plot.scene().sigMouseMoved.connect(self.mouse_moved_capital)
+        self.daily_income_plot.scene().sigMouseMoved.connect(self.mouse_moved_income)
+        self.profitability_plot.scene().sigMouseMoved.connect(self.mouse_moved_profitability)
 
     def init_statistic(self):
 
@@ -247,39 +297,76 @@ class PGCanvas(QWidget):
         self.final_label.setStyleSheet(f"color: #089981; font: 12pt;") if balance['value'].iloc[-1] >= balance['value'].iloc[0] else self.final_label.setStyleSheet(f"color: #F23645; font: 12pt;")
 
     def plot_candlestick(self, ohlc_data):
-        times = ohlc_data.index.astype('int64') // 10**9  # Преобразование в UNIX-время (секунды)
-        candle_width = 0.7 * (times[1] - times[0])
-        shadow_width = candle_width / 10
+        times = ohlc_data.index.astype('int64') // 10**9
+        opens = ohlc_data['open'].values
+        highs = ohlc_data['high'].values
+        lows = ohlc_data['low'].values
+        closes = ohlc_data['close'].values
         
-        for i, (index, row) in enumerate(ohlc_data.iterrows()):
-            open = row['open']
-            high = row['high']
-            low = row['low']
-            close = row['close']
-            date = times[i]
-
-            clr = '#089981' if close >= open else '#F23645'
-            
-            candle_item = QGraphicsRectItem(date - candle_width/2, open if close >= open else close,
-                                                    candle_width, abs(open - close))
-            candle_item.setPen(pg.mkPen(color = clr, width=1.5))
-            candle_item.setBrush(pg.mkBrush(color = clr))
-            self.candlestick_plot.addItem(candle_item)
-            
-        for i, (index, row) in enumerate(ohlc_data.iterrows()):
-            open = row['open']
-            high = row['high']
-            low = row['low']
-            close = row['close']
-            date = times[i]
-
-            clr = '#089981' if close >= open else '#F23645'
-            
-            shadow_item = QGraphicsRectItem(date - shadow_width/2, low,
-                                                    shadow_width, abs(high - low))
-            shadow_item.setPen(pg.mkPen(color = clr, width=1.5))
-            shadow_item.setBrush(pg.mkBrush(color = clr))
-            self.candlestick_plot.addItem(shadow_item)
+        # Вычисляем параметры отображения свечей
+        candle_width = 0.7 * (times[1] - times[0])
+        
+        # Определяем цвета свечей
+        bull_idx = closes >= opens
+        bear_idx = ~bull_idx
+        
+        # Создаем массивы для бычьих свечей
+        bull_times = times[bull_idx]
+        bull_opens = opens[bull_idx]
+        bull_closes = closes[bull_idx]
+        bull_highs = highs[bull_idx]
+        bull_lows = lows[bull_idx]
+        
+        # Создаем массивы для медвежьих свечей
+        bear_times = times[bear_idx]
+        bear_opens = opens[bear_idx]
+        bear_closes = closes[bear_idx]
+        bear_highs = highs[bear_idx]
+        bear_lows = lows[bear_idx]
+        
+        # Отрисовка бычьих теней
+        if len(bull_times) > 0:
+            bull_shadows = pg.PlotDataItem(
+                x=np.repeat(bull_times, 2),
+                y=np.vstack((bull_lows, bull_highs)).T.flatten(),
+                connect='pairs',
+                pen=pg.mkPen('#089981', width=1)
+            )
+            self.candlestick_plot.addItem(bull_shadows)
+        
+        # Отрисовка медвежьих теней
+        if len(bear_times) > 0:
+            bear_shadows = pg.PlotDataItem(
+                x=np.repeat(bear_times, 2),
+                y=np.vstack((bear_lows, bear_highs)).T.flatten(),
+                connect='pairs',
+                pen=pg.mkPen('#F23645', width=1)
+            )
+            self.candlestick_plot.addItem(bear_shadows)
+        
+        # Отрисовка бычьих тел
+        if len(bull_times) > 0:
+            bull_bodies = pg.BarGraphItem(
+                x=bull_times,
+                height=bull_closes - bull_opens,
+                width=candle_width,
+                brush=pg.mkBrush('#089981'),
+                pen=pg.mkPen('#089981'),
+                y0=bull_opens
+            )
+            self.candlestick_plot.addItem(bull_bodies)
+    
+        # Отрисовка медвежьих тел одним вызовом
+        if len(bear_times) > 0:
+            bear_bodies = pg.BarGraphItem(
+                x=bear_times,
+                height=bear_closes - bear_opens,
+                width=candle_width,
+                brush=pg.mkBrush('#F23645'),
+                pen=pg.mkPen('#F23645'),
+                y0=bear_opens
+            )
+            self.candlestick_plot.addItem(bear_bodies)
 
     def plot_balance(self, data):
         init = data['value'].iloc[0]
@@ -289,10 +376,7 @@ class PGCanvas(QWidget):
         # Fix division by zero by checking if min and max are equal
         value_min = data['value'].min()
         value_max = data['value'].max()
-        if value_max == value_min:
-            level = 0.5  # Use middle value if range is 0
-        else:
-            level = (init - value_min)/(value_max - value_min)
+        level = (init - value_min)/(value_max - value_min)
 
         grad = QtGui.QLinearGradient(0, value_min, 0, value_max)
         grad.setColorAt(0.0, pg.mkColor('#F23645'))
@@ -465,9 +549,13 @@ class PGCanvas(QWidget):
 
     def mouse_moved_candel(self, evt):
         mouse_point = self.candlestick_plot.plotItem.vb.mapSceneToView(evt)
-        self.vline.setPos(mouse_point.x())
-        self.vline_.setPos(mouse_point.x())
-        self.hline.setPos(mouse_point.y())
+
+        self.hline1.setPos(mouse_point.y())
+        self.vline1.setPos(mouse_point.x())
+        self.vline2.setPos(mouse_point.x())
+        self.vline3.setPos(mouse_point.x())
+        self.vline4.setPos(mouse_point.x())
+        self.vline5.setPos(mouse_point.x())
 
         # Обновление плашек с ценой и временем
         time_text = dt.utcfromtimestamp(mouse_point.x()).strftime('%H:%M %d-%m-%Y')
@@ -477,9 +565,61 @@ class PGCanvas(QWidget):
 
     def mouse_moved_balance(self, evt):        
         mouse_point = self.balance_plot.plotItem.vb.mapSceneToView(evt)
-        self.vline_.setPos(mouse_point.x())
-        self.vline.setPos(mouse_point.x())
-        self.hline_.setPos(mouse_point.y())
+
+        self.hline2.setPos(mouse_point.y())
+        self.vline1.setPos(mouse_point.x())
+        self.vline2.setPos(mouse_point.x())
+        self.vline3.setPos(mouse_point.x())
+        self.vline4.setPos(mouse_point.x())
+        self.vline5.setPos(mouse_point.x())
+
+        # Обновление плашек с ценой и временем
+        time_text = dt.utcfromtimestamp(mouse_point.x()).strftime('%H:%M %d-%m-%Y')
+        price_text = f"Price: {mouse_point.y():.2f}"
+        self.data_label.setText(f"{time_text}")
+        self.price_label.setText(f"{price_text}")
+
+    def mouse_moved_capital(self, evt):        
+        mouse_point = self.capital_plot.plotItem.vb.mapSceneToView(evt)
+        
+        self.hline3.setPos(mouse_point.y())
+        self.vline1.setPos(mouse_point.x())
+        self.vline2.setPos(mouse_point.x())
+        self.vline3.setPos(mouse_point.x())
+        self.vline4.setPos(mouse_point.x())
+        self.vline5.setPos(mouse_point.x())
+
+        # Обновление плашек с ценой и временем
+        time_text = dt.utcfromtimestamp(mouse_point.x()).strftime('%H:%M %d-%m-%Y')
+        price_text = f"Price: {mouse_point.y():.2f}"
+        self.data_label.setText(f"{time_text}")
+        self.price_label.setText(f"{price_text}")
+
+    def mouse_moved_income(self, evt):        
+        mouse_point = self.daily_income_plot.plotItem.vb.mapSceneToView(evt)
+        
+        self.hline4.setPos(mouse_point.y())
+        self.vline1.setPos(mouse_point.x())
+        self.vline2.setPos(mouse_point.x())
+        self.vline3.setPos(mouse_point.x())
+        self.vline4.setPos(mouse_point.x())
+        self.vline5.setPos(mouse_point.x())
+
+        # Обновление плашек с ценой и временем
+        time_text = dt.utcfromtimestamp(mouse_point.x()).strftime('%H:%M %d-%m-%Y')
+        price_text = f"Price: {mouse_point.y():.2f}"
+        self.data_label.setText(f"{time_text}")
+        self.price_label.setText(f"{price_text}")
+
+    def mouse_moved_profitability(self, evt):        
+        mouse_point = self.profitability_plot.plotItem.vb.mapSceneToView(evt)
+        
+        self.hline5.setPos(mouse_point.y())
+        self.vline1.setPos(mouse_point.x())
+        self.vline2.setPos(mouse_point.x())
+        self.vline3.setPos(mouse_point.x())
+        self.vline4.setPos(mouse_point.x())
+        self.vline5.setPos(mouse_point.x())
 
         # Обновление плашек с ценой и временем
         time_text = dt.utcfromtimestamp(mouse_point.x()).strftime('%H:%M %d-%m-%Y')
@@ -830,6 +970,223 @@ class PGCanvas(QWidget):
                 y = [self.drawing_start_pos[1], self.drawing_start_pos[1], 
                      pos.y(), pos.y(), self.drawing_start_pos[1]]
                 self.current_drawing.setData(x, y)
+
+    def plot(self, df, positions, balance, indicators):
+        """Display data on all charts"""
+        for plot in [self.candlestick_plot, self.balance_plot, self.capital_plot, 
+                    self.daily_income_plot, self.profitability_plot, self.positions_plot]:
+            plot.clear()
+            plot.plotItem.vb.clear()
+
+        if len(df) < 5001:
+            self.plot_candlestick(df)
+        if len(indicators) > 0: 
+            self.plot_indicators(df, indicators)
+        if len(balance) > 0:
+            self.plot_balance(balance)
+            self.plot_capital_usage(positions, df)  # Изменено на передачу positions
+            self.plot_daily_income(balance)
+
+        if len(positions) > 0:
+            self.plot_positions(positions, df)
+            self.plot_profitability(positions)
+            self.plot_positions_pnl(positions)  # Добавляем отрисовку нового графика
+            self.get_statistic(balance, positions)
+            self.plot_statistic()
+
+        for plot in [self.capital_plot, self.daily_income_plot]: 
+            plot.getAxis('bottom').setStyle(tickFont=QFont('Arial', 8))
+            plot.getAxis('left').setStyle(tickFont=QFont('Arial', 8))
+            plot.showGrid(x=True, y=True, alpha=0.3)
+            plot.setXLink(self.candlestick_plot)
+
+        self.add_cursor_line()
+
+    def plot_capital_usage(self, positions, df):
+        """Plot total position quantity over time with step style"""
+        if not positions:
+            return
+            
+        times = df.index.astype('int64') // 10**9
+        qty_by_time = {t: 0 for t in times}
+        
+        for pos in positions:
+            open_time = pos['openTimestamp'].value // 10**9
+            close_time = pos['closeTimestamp'].value // 10**9 if pos['status'] == 'closed' else times[-1]
+            qty = abs(float(pos['qty']))
+            
+            for t in times:
+                if open_time <= t < close_time:
+                    qty_by_time[t] += qty
+        
+        time_points = list(qty_by_time.keys())
+        qty_values = list(qty_by_time.values())
+        
+        # Добавляем дополнительные точки для ступенчатого отображения
+        step_x = []
+        step_y = []
+        
+        for i in range(len(time_points)):
+            step_x.append(time_points[i])
+            step_x.append(time_points[i] if i == len(time_points)-1 else time_points[i+1])
+            step_y.append(qty_values[i])
+            step_y.append(qty_values[i])
+        
+        self.capital_plot.plot(step_x, step_y,
+                         pen=pg.mkPen(color='white', width=2),
+                         fillLevel=0,
+                         brush=(255, 255, 255, 50),
+                         name="Total Position Size")
+
+    def plot_profitability(self, positions):
+        """Plot positions profitability histogram"""
+        if not positions:
+            return
+
+        pnls = [float(p['pnl']) for p in positions if p['status'] == 'closed']
+        if not pnls:
+            return
+        
+        num_bins = min(40, int(len(pnls) / 2))  # Не более 20 столбцов
+        
+        max_pnl = max(pnls)
+        min_pnl = min(pnls)
+
+        num_loss_bins = max(0, int( round(num_bins * ((0 - min_pnl) / (max_pnl - min_pnl)))))
+        num_profit_bins = num_bins - num_loss_bins
+
+        profits = [p for p in pnls if p > 0]
+        losses = [p for p in pnls if p <= 0]
+        
+        self.bar_width = 0
+        
+        if profits:
+            y_profits, x_profits = np.histogram(profits, bins=num_profit_bins)
+            x_center = (x_profits[:-1] + x_profits[1:]) / 2
+            bar_width = (x_profits[1] - x_profits[0]) * 0.99
+            
+            profit_bars = pg.BarGraphItem(
+                x=x_center,
+                height=y_profits,
+                width=bar_width,
+                brush=pg.mkBrush(color=(70, 175, 80, 100)),
+                pen=pg.mkPen(color=(70, 175, 80))
+            )
+            self.profitability_plot.addItem(profit_bars)
+        
+        if losses:
+            y_losses, x_losses = np.histogram(losses, bins=num_loss_bins)
+            x_center = (x_losses[:-1] + x_losses[1:]) / 2
+            bar_width = (x_losses[1] - x_losses[0]) * 0.99
+            
+            loss_bars = pg.BarGraphItem(
+                x=x_center,
+                height=y_losses,
+                width=bar_width,
+                brush=pg.mkBrush(color=(242, 54, 69, 100)),
+                pen=pg.mkPen(color=(242, 54, 69))
+            )
+            self.profitability_plot.addItem(loss_bars)
+
+        zero_line = pg.InfiniteLine(pos=0, angle=90, pen=pg.mkPen('gray', style=QtCore.Qt.DotLine))
+        self.profitability_plot.addItem(zero_line)
+        
+        if profits or losses:
+            min_pnl = min(x_losses[0] if losses else 0, 0)
+            max_pnl = max(x_profits[-1] if profits else 0, 0)
+            self.profitability_plot.setXRange(min_pnl * 1.1, max_pnl * 1.1)  # Добавляем отступы
+            self.profitability_plot.setYRange(0, max(max(y_profits) if profits else 0, 
+                                                   max(y_losses) if losses else 0) * 1.1)
+
+    def plot_daily_income_step_style(self, balance):
+        """Plot daily income as a line chart with step style"""
+        # Calculate daily changes
+        balance['daily_change'] = balance['value'].diff()
+        daily_income = balance.groupby(balance['ts'].dt.date)['daily_change'].sum()    
+        daily_dates = pd.to_datetime(daily_income.index)
+        times = daily_dates.astype('int64') // 10**9
+
+        # Add an extra point for stepMode
+        extra_time = times[-1] + (times[1] - times[0])  # Add one more interval
+        times = np.append(times, extra_time)
+
+        init = 0
+        cm = pg.ColorMap([0.0, 1.0], ['#F23645', '#089981'])
+        pen0 = cm.getPen(span=(init-0.5, init+0.0), width=2)
+        
+        value_min = daily_income.min()
+        value_max = daily_income.max()
+        level = (init - value_min)/(value_max - value_min)
+
+        grad = QtGui.QLinearGradient(0, value_min, 0, value_max)
+        grad.setColorAt(0.0, pg.mkColor('#F23645'))
+        grad.setColorAt(level, QColor(0, 0, 0, 0))
+        grad.setColorAt(1, pg.mkColor('#089981'))
+        brush = QtGui.QBrush(grad)
+
+        # Plot with stepMode
+        self.daily_income_plot.plot(times, daily_income.values, 
+                                  fillLevel=init, 
+                                  brush=brush, 
+                                  pen=pen0, 
+                                  stepMode=True,
+                                  name="Balance")
+        
+    def plot_daily_income(self, balance):
+        """Plot daily income as a line chart"""
+        balance['daily_change'] = balance['value'].diff()
+        daily_income = balance.groupby(balance['ts'].dt.date)['daily_change'].sum()    
+        daily_dates = pd.to_datetime(daily_income.index)
+        times = daily_dates.astype('int64') // 10**9
+
+        init = 0
+        cm = pg.ColorMap([0.0, 1.0], ['#F23645', '#089981'])
+        pen0 = cm.getPen(span=(init-0.5, init+0.0), width=2)
+        
+        value_min = daily_income.min()
+        value_max = daily_income.max()
+        level = (init - value_min)/(value_max - value_min)
+
+        grad = QtGui.QLinearGradient(0, value_min, 0, value_max)
+        grad.setColorAt(0.0, pg.mkColor('#F23645'))
+        grad.setColorAt(level, QColor(0, 0, 0, 0))
+        grad.setColorAt(1, pg.mkColor('#089981'))
+        brush = QtGui.QBrush(grad)
+        self.daily_income_plot.plot(times, daily_income, fillLevel=init, brush=brush, pen=pen0, name="Balance")
+
+
+    def plot_positions_pnl(self, positions):
+        """Plot positions PnL scatter plot"""
+        if not positions:
+            return
+            
+        x_values = [] 
+        y_values = [] 
+        colors = []   
+        
+        position_number = 1
+        for position in positions:
+            if position['status'] == 'closed':
+                x_values.append(position['closeTimestamp'].value // 10**9)
+                pnl = float(position['pnl'])
+                y_values.append(pnl)
+                colors.append('#089981' if pnl >= 0 else '#F23645')
+                position_number += 1
+                
+        for x, y, color in zip(x_values, y_values, colors):
+            self.positions_plot.plot([x], [y],
+                                   pen=None,
+                                   symbol='o',
+                                   symbolSize=8,
+                                   symbolBrush=color,
+                                   symbolPen=None)
+                                   
+        zero_line = pg.InfiniteLine(pos=0, angle=0, pen=pg.mkPen('gray', style=QtCore.Qt.DotLine))
+        self.positions_plot.addItem(zero_line)
+
+
+
+
 
 
 

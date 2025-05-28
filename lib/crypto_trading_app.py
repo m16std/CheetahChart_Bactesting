@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import  QVBoxLayout, QStyledItemDelegate, QWidget, QHBoxLayout, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QSplitter
-from PyQt5.QtGui import QPainter, QPixmap, QIcon, QColor, QPainterPath, QPen
-from PyQt5.QtCore import Qt, QSettings, QSize, QRect, QRectF, QTimer, QThread, pyqtSignal
+from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QHBoxLayout, QScrollArea, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QSplitter
+from PyQt5.QtGui import QPainter, QPixmap, QIcon, QColor, QPainterPath, QPen, QRegion
+from PyQt5.QtCore import Qt, QSettings, QSize, QRect, QRectF, QTimer, QThread, pyqtSignal, QPoint
 from pyqttoast import Toast, ToastPreset
 from PyQt5.QtSvg import QSvgRenderer
 import pandas as pd
@@ -51,6 +51,8 @@ class CryptoTradingApp(QWidget):
         self.api_manager = APIManager() 
         self.is_trade = False
         self.positions = None
+        self.balance = None
+        self.indicators = None
         self.previous_price = '0.0'
         self.file_handler = FileManager(self)
         self.strategy_manager = StrategyManager()
@@ -67,11 +69,7 @@ class CryptoTradingApp(QWidget):
         self.active_api = None
         self.load_active_api()
 
-        self.status_updater = TradingStatusUpdater(self)
-        self.status_updater.update_signal.connect(self._apply_trading_status_update)
-        self.timer_refresh = QTimer(self)  # Таймер для обновления окна торговли
-        self.timer_refresh.timeout.connect(self.update_trading_status_window)
-        self.timer_refresh.start(5000) 
+        self.update_trading_status_window()
 
         self.data_source = "OKX"  
         self.data_loader = DataDownloadThread  
@@ -252,6 +250,13 @@ class CryptoTradingApp(QWidget):
         show_stats_action.triggered.connect(self.show_detailed_statistics)
         show_stats_action.setIcon(self.recolor_svg_icon("resources/binoculars.svg", icon_color))
         strat_menu.addAction(show_stats_action)
+
+        create_report_action = QAction('Создать отчет', self)
+        create_report_action.triggered.connect(self.create_test_report)
+        create_report_action.setIcon(self.recolor_svg_icon("resources/export.svg", icon_color))
+        strat_menu.addAction(create_report_action)
+
+        strat_menu.addSeparator()
 
         optimize_action = QAction('Оптимизация параметров', self)
         optimize_action.triggered.connect(self.show_optimization_dialog)
@@ -709,21 +714,11 @@ class CryptoTradingApp(QWidget):
     def on_calculation_complete(self, positions, balance, indicators):
         """Обрабатывает завершение расчета стратегии."""
         self.positions = positions
+        self.balance = balance
+        self.indicators = indicators
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.calculation_complete.disconnect(self.on_calculation_complete)
         self.plot(self.df, positions, balance, indicators)
-
-        # Заполнение таблицы позиций в окне торговли
-        self.trading_status_window.update_data(
-            is_active=self.is_trade,
-            current_pair=self.symbol_input.currentText(),
-            open_positions=positions,
-            time_to_next_cycle="N/A",
-            current_balance=0,
-            floating_pnl=0,
-            used_margin=0,
-            min_margin=0
-        )
 
         stats = self.calculate_detailed_statistics()
         self.trading_status_window.update_statistics(stats)
@@ -771,21 +766,8 @@ class CryptoTradingApp(QWidget):
     def plot(self, df, positions, balance, indicators):
         """Отображает данные на графике."""
         self.bar.setFormat("Отрисовка")
-
-        self.canvas.candlestick_plot.clear()
-        self.canvas.balance_plot.clear()
-        if (len(df) < 5001):
-            self.canvas.plot_candlestick(df)
-        if len(indicators)>0: self.canvas.plot_indicators(df, indicators)
-        if len(balance)>0: self.canvas.plot_balance(balance)
-        if len(positions)>0: 
-            self.canvas.plot_positions(positions, df)
-            self.canvas.get_statistic(balance, positions)
-            self.canvas.plot_statistic()
-
-
+        self.canvas.plot(df, positions, balance, indicators)
         self.canvas.add_cursor_line()
-        
         self.bar.setValue(100)
         self.bar.setFormat("Готово")
         self.start_price_updates()
@@ -875,7 +857,6 @@ class CryptoTradingApp(QWidget):
             self.timer.start()
             
         self.trading_status_window.show()
-        self.update_trading_status_window()
 
     def stop_trading(self):
         """Останавливает торговлю."""
@@ -912,12 +893,25 @@ class CryptoTradingApp(QWidget):
     def update_trading_status_window(self):
         """Асинхронно обновляет окно статуса торговли."""
         if not hasattr(self, 'status_updater') or not self.status_updater:
-            self.status_updater = TradingStatusUpdater(self)
+            self.status_updater = TradingStatusUpdater(
+                api=self.trading_sync_manager.api,
+                is_trade=self.is_trade,
+                symbol=self.symbol_input.currentText(),
+                positions=self.positions,
+                timer=self.timer if hasattr(self, 'timer') else None,
+                update_interval=30
+            )
             self.status_updater.update_signal.connect(self._apply_trading_status_update)
             self.status_updater.error_signal.connect(self.handle_updater_error)
-        
-        if not self.status_updater.isRunning():
-            self.status_updater.run()
+            self.status_updater.start()
+        else:
+            # Обновляем параметры без перезапуска потока
+            self.status_updater.update_params(
+                is_trade=self.is_trade,
+                symbol=self.symbol_input.currentText(),
+                positions=self.positions,
+                timer=self.timer if hasattr(self, 'timer') else None
+            )
 
     def handle_updater_error(self, error_msg):
         """Обрабатывает ошибки обновления статуса."""
@@ -975,17 +969,6 @@ class CryptoTradingApp(QWidget):
             self.trading_status_window.show()
             self.splitter.setSizes([1050, 250])  
 
-    def closeEvent(self, event):
-        """Останавливает все потоки перед закрытием приложения."""
-        if hasattr(self, 'timer') and self.timer:
-            self.timer.stop()
-            self.timer.wait()
-        if hasattr(self, 'price_updater') and self.price_updater:
-            self.price_updater.stop_updating()
-        if hasattr(self, 'status_updater') and self.status_updater:
-            self.status_updater.stop()  # Используем новый метод stop
-        super().closeEvent(event)
-
     def show_detailed_statistics(self):
         """Отображает окно детальной статистики."""
         if not hasattr(self, 'df') or len(self.df) == 0:
@@ -999,7 +982,7 @@ class CryptoTradingApp(QWidget):
         stats = self.calculate_detailed_statistics()
         
         from lib.windows.multitask.statistics_window import StatisticsWindow
-        stats_window = StatisticsWindow(stats, self.current_theme)
+        stats_window = StatisticsWindow(stats, self.current_theme)  # Увеличенный размер шрифта для отчета
         stats_window.exec_()
 
     def calculate_detailed_statistics(self):
@@ -1050,7 +1033,6 @@ class CryptoTradingApp(QWidget):
 
     def calculate_sharpe_ratio(self):
         """Вычисляет коэффициент Шарпа на основе позиций."""
-        """Calculate Sharpe Ratio from positions"""
         if not self.positions:
             return 0
             
@@ -1097,6 +1079,134 @@ class CryptoTradingApp(QWidget):
         elif self.data_source == "Bybit":
             self.data_loader = BybitAPI()
 
+    def closeEvent(self, event):
+        """Останавливает все потоки перед закрытием приложения."""
+        if hasattr(self, 'timer') and self.timer:
+            self.timer.stop()
+            self.timer.wait()
+        if hasattr(self, 'price_updater') and self.price_updater:
+            self.price_updater.stop_updating()
+        if hasattr(self, 'status_updater') and self.status_updater:
+            self.status_updater.stop()  # Используем новый метод stop
+        super().closeEvent(event)
+
+    def create_test_report(self):
+        """Создает отчет о тестировании стратегии."""
+        if not hasattr(self, 'df') or len(self.df) == 0 or not self.positions:
+            self.show_toast(ToastPreset.ERROR, 'Ошибка', 'Нет данных для создания отчета')
+            return
+
+        # Определяем фиксированные размеры для отчета и его компонентов
+        REPORT_WIDTH = 1600
+        REPORT_HEIGHT = 2000
+        CONTENT_HEIGHT = 1800
+        CONTENT_WIDTH = REPORT_WIDTH - 50  # С учетом отступов
+        TEMP_CANVAS_WIDTH = 950  # Фиксированная ширина для временного холста
+        
+        # Рассчитываем ширины для графиков и статистики (соотношение 10:6)
+        CHARTS_WIDTH = int(CONTENT_WIDTH * (10/16))
+        STATS_WIDTH = int(CONTENT_WIDTH * (6/16))
+
+        # Создаем временный холст с фиксированными размерами
+        temp_canvas = PGCanvas(facecolor='#151924' if self.current_theme == 'dark' else '#ffffff', 
+                             textcolor='white' if self.current_theme == 'dark' else 'black')
+        temp_canvas_widget = temp_canvas.get_canvas()
+        temp_canvas_widget.setFixedSize(TEMP_CANVAS_WIDTH, CONTENT_HEIGHT)
+        
+        # Копируем данные на временный холст
+        temp_canvas.plot(self.df, self.positions, self.balance, self.indicators)
+
+        # Создаем виджет для отчета
+        report_widget = QWidget()
+        report_widget.setFixedSize(REPORT_WIDTH, REPORT_HEIGHT)
+        report_layout = QVBoxLayout(report_widget)
+        report_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Добавляем шапку с логотипом
+        header = QWidget()
+        header_layout = QHBoxLayout(header)
+        logo = QLabel()
+        if self.current_theme == 'dark':
+            pixmap = QPixmap("resources/wide_logo_w.svg")
+        else:
+            pixmap = QPixmap("resources/wide_logo_b.svg")
+        scaled_pixmap = pixmap.scaled(QSize(900, 150), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        logo.setPixmap(scaled_pixmap)
+        header_layout.addWidget(logo)
+        header_layout.addStretch()
+        
+        # Добавляем информацию о стратегии
+        strategy_info = QLabel(f"Strategy: {self.strat_input.currentText()}\n"
+                             f"Currency: {self.symbol_input.currentText()}\n"
+                             f"Timeframe: {self.interval_input.currentText()}")
+        strategy_info.setStyleSheet("font-size: 30px;")
+        header_layout.addWidget(strategy_info)
+        report_layout.addWidget(header)
+
+        # Создаем контейнер для графиков и статистики с фиксированными размерами
+        content = QWidget()
+        content.setFixedHeight(CONTENT_HEIGHT)
+        content_layout = QHBoxLayout(content)
+        content_layout.setSpacing(20)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Получаем снимок временного холста
+        temp_canvas_pixmap = temp_canvas_widget.grab()
+        
+        # Масштабируем изображение под нужную ширину
+        scaled_canvas = temp_canvas_pixmap.scaled(
+            CHARTS_WIDTH, 
+            CONTENT_HEIGHT,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation
+        )
+
+        # Создаем контейнер для графиков
+        charts_container = QWidget()
+        charts_container.setFixedSize(CHARTS_WIDTH, CONTENT_HEIGHT)
+        charts_layout = QVBoxLayout(charts_container)
+        charts_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Добавляем масштабированное изображение
+        canvas_label = QLabel()
+        canvas_label.setPixmap(scaled_canvas)
+        charts_layout.addWidget(canvas_label)
+        content_layout.addWidget(charts_container)
+
+        # Добавляем статистику
+        stats_container = QWidget()
+        stats_container.setFixedSize(STATS_WIDTH, CONTENT_HEIGHT)
+        stats_layout = QVBoxLayout(stats_container)
+        stats_layout.setContentsMargins(0, 0, 0, 0)
+
+        stats = self.calculate_detailed_statistics()
+        from lib.windows.multitask.statistics_window import StatisticsWindow
+        stats_window = StatisticsWindow(stats, self.current_theme, font_size=18)  # Увеличенный размер шрифта для отчета
+        stats_layout.addWidget(stats_window)
+        content_layout.addWidget(stats_container)
+
+        report_layout.addWidget(content)
+
+        # Создаем финальное изображение
+        image = QPixmap(REPORT_WIDTH, REPORT_HEIGHT)
+        image.fill(Qt.transparent)
+        painter = QPainter(image)
+        report_widget.render(painter)
+        painter.end()
+
+        # Сохраняем отчет
+        file_name, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Сохранить отчет", 
+            f"report_{self.strat_input.currentText()}_{self.symbol_input.currentText()}.png",
+            "Images (*.png)"
+        )
+        if file_name:
+            image.save(file_name)
+            self.show_toast(ToastPreset.SUCCESS, 'Успех', f'Отчет сохранен в {file_name}')
+
+        # Очищаем временные объекты
+        temp_canvas_widget.deleteLater()
 
 
 

@@ -34,10 +34,10 @@ class MultitaskWindow(QWidget):
         self.view_buttons_layout.setSpacing(0)
         self.view_buttons_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.trade_button = QPushButton("ТОРГОВЛЯ")
-        self.stats_button = QPushButton("СТАТИСТИКА")
-        self.settings_button = QPushButton("НАСТРОЙКИ")
-        self.logs_button = QPushButton("ЛОГИ")
+        self.trade_button = QPushButton("TRADING")
+        self.stats_button = QPushButton("STATISTICS")
+        self.settings_button = QPushButton("SETTINGS")
+        self.logs_button = QPushButton("LOGBOOK")
 
         button_style = """
             QPushButton {
@@ -117,41 +117,36 @@ class MultitaskWindow(QWidget):
         # Установка иконок
         self.update_close_button_icon(Qt.black)
 
-        # Create stacked widget for views
         self.stacked_widget = QStackedWidget()
         self.layout.addWidget(self.stacked_widget)
 
-        # Create and add trading view
         self.trading_view = QWidget()
         self.trading_layout = QVBoxLayout(self.trading_view)
         self.trading_layout.setContentsMargins(0, 0, 0, 0) 
         self.init_trading_view()
         self.stacked_widget.addWidget(self.trading_view)
 
-        # Create and add statistics view
         self.stats_view = QWidget()
         self.stats_layout = QVBoxLayout(self.stats_view)
         self.stats_layout.setContentsMargins(0, 0, 0, 0) 
         self.init_stats_view()
         self.stacked_widget.addWidget(self.stats_view)
 
-        # Create and add settings view
         self.settings_view = QWidget()
         self.settings_layout = QVBoxLayout(self.settings_view)
         self.settings_layout.setContentsMargins(0, 0, 0, 0) 
         self.init_settings_view()
         self.stacked_widget.addWidget(self.settings_view)
 
-        # Create and add logs view
         self.logs_view = QWidget()
         self.logs_layout = QVBoxLayout(self.logs_view)
         self.logs_layout.setContentsMargins(0, 0, 0, 0) 
         self.init_logs_view()
         self.stacked_widget.addWidget(self.logs_view)
 
-        # Set initial view
+
         self.stacked_widget.setCurrentIndex(0)
-        self.apply_theme(self.current_theme)  # Apply theme after UI initialization
+        self.apply_theme(self.current_theme)  
 
     def init_trading_view(self):
         """Initialize trading view widgets"""
