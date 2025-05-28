@@ -163,7 +163,7 @@ class StatisticsWindow(QDialog):
                 }
                 QTableWidget::item {
                     padding: 5px;
-                    font-size: {self.font_size}px;
+                    font-size: 12px;
                 }
                 QHeaderView::section {
                     background-color: #202020;
@@ -180,6 +180,7 @@ class StatisticsWindow(QDialog):
                 }
                 QTableWidget::item {
                     padding: 5px;
+                    font-size: 12px;
                 }
                 QHeaderView::section {
                     background-color: #f0f0f0;

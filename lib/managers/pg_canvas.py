@@ -14,6 +14,7 @@ import numpy as np
 class PGCanvas(QWidget):
     def __init__(self, facecolor, textcolor):
         super(PGCanvas, self).__init__()
+        self.textcolor= textcolor
         
         # Initialize statistics first
         self.stat_texts = [
@@ -1009,6 +1010,9 @@ class PGCanvas(QWidget):
             
         times = df.index.astype('int64') // 10**9
         qty_by_time = {t: 0 for t in times}
+        shadow_color = pg.mkBrush(255, 255, 255, 50) if self.textcolor == 'white' else pg.mkBrush(96, 156, 210, 50)
+        line_pen = pg.mkPen(color='white', width=2) if self.textcolor == 'white' else pg.mkPen(color=(96, 156, 210), width=2)
+        
         
         for pos in positions:
             open_time = pos['openTimestamp'].value // 10**9
@@ -1033,9 +1037,9 @@ class PGCanvas(QWidget):
             step_y.append(qty_values[i])
         
         self.capital_plot.plot(step_x, step_y,
-                         pen=pg.mkPen(color='white', width=2),
+                         pen=line_pen,
                          fillLevel=0,
-                         brush=(255, 255, 255, 50),
+                         brush=shadow_color,
                          name="Total Position Size")
 
     def plot_profitability(self, positions):

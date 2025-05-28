@@ -1130,16 +1130,17 @@ class CryptoTradingApp(QWidget):
             pixmap = QPixmap("resources/wide_logo_w.svg")
         else:
             pixmap = QPixmap("resources/wide_logo_b.svg")
-        scaled_pixmap = pixmap.scaled(QSize(900, 150), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        scaled_pixmap = pixmap.scaled(QSize(800, 120), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         logo.setPixmap(scaled_pixmap)
         header_layout.addWidget(logo)
         header_layout.addStretch()
         
         # Добавляем информацию о стратегии
-        strategy_info = QLabel(f"Strategy: {self.strat_input.currentText()}\n"
+        strategy_info = QLabel("BACKTEST REPORT\n"
+                               f"Strategy: {self.strat_input.currentText()}\n"
                              f"Currency: {self.symbol_input.currentText()}\n"
                              f"Timeframe: {self.interval_input.currentText()}")
-        strategy_info.setStyleSheet("font-size: 30px;")
+        strategy_info.setStyleSheet("font-size: 24px; text-align: right;")
         header_layout.addWidget(strategy_info)
         report_layout.addWidget(header)
 
