@@ -256,6 +256,7 @@ class MultitaskWindow(QWidget):
         # Create default stats with zeros
         default_stats = {
             'total_return': 0,
+            'percent_per_annum': 0,
             'profit_factor': 0,
             'win_rate': 0,
             'max_drawdown': 0,

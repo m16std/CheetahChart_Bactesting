@@ -248,10 +248,10 @@ class SettingsWindow(QDialog):
             self.settings.setValue("data_source", self.data_source_combo.currentText())
 
             # Сохранение настроек для вкладки API
-            self.settings.setValue("api_name", self.api_name_input.text())
-            self.settings.setValue("api_key", self.api_key_input.text())
-            self.settings.setValue("api_secret", self.api_secret_input.text())
-            self.settings.setValue("api_passphrase", self.api_passphrase_input.text())
+            self.settings.setValue("api_name", self.api_settings.api_name_input.text())
+            self.settings.setValue("api_key", self.api_settings.api_key_input.text())
+            self.settings.setValue("api_secret", self.api_settings.api_secret_input.text())
+            self.settings.setValue("api_passphrase", self.api_settings.passphrase_input.text())
 
             self.accept()
             

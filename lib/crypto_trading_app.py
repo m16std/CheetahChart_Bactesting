@@ -691,7 +691,6 @@ class CryptoTradingApp(QWidget):
     def on_data_downloaded_draw_it(self, data):
         """Обрабатывает данные после завершения скачивания для отображения на графике."""
         self.df = data
-        print(self.df)
         self.plot(self.df, [], [], [])
 
     def run_strategy(self):
@@ -1014,6 +1013,7 @@ class CryptoTradingApp(QWidget):
         
         stats = {
             'total_return': round((float(self.canvas.stats['final'].split()[0]) - float(self.canvas.stats['init'].split()[0])) / float(self.canvas.stats['init'].split()[0]) * 100, 2),
+            'percent_per_annum': round((float(self.canvas.stats['final'].split()[0]) - float(self.canvas.stats['init'].split()[0])) / float(self.canvas.stats['init'].split()[0]) * 100 / (self.df.index[-1] - self.df.index[0]).days * 365, 2),
             'profit_factor': round(sum(p['pnl'] for p in winning_trades) / abs(sum(p['pnl'] for p in losing_trades)) if losing_trades else float('inf'), 2),
             'win_rate': float(self.canvas.stats['winrate'].strip('%')),
             'max_drawdown': float(self.canvas.stats['drawdown'].strip('%')),
@@ -1051,11 +1051,13 @@ class CryptoTradingApp(QWidget):
         returns = [p['pnl'] for p in self.positions]
         if not returns:
             return 0
+        
+        of_year = (self.df.index[-1] - self.df.index[0]).days / 365
             
-        mean_return = sum(returns) / len(returns)
+        mean_return = round((float(self.canvas.stats['final'].split()[0]) - float(self.canvas.stats['init'].split()[0])) / float(self.canvas.stats['init'].split()[0]) * 100, 2)
         std_dev = (sum((r - mean_return) ** 2 for r in returns) / len(returns)) ** 0.5
         
-        return mean_return / std_dev if std_dev != 0 else 0
+        return (mean_return / of_year - 20) / std_dev if std_dev != 0 else 0
 
     def calculate_avg_holding_time(self):
         """Вычисляет среднее время удержания позиций."""

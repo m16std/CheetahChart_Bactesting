@@ -33,7 +33,8 @@ class StatisticsWindow(QDialog):
                 "Max Drawdown": f"{stats_data.get('max_drawdown', 0)}%",
                 "Sharpe Ratio": str(stats_data.get('sharpe_ratio', 0)),
                 "Trades per Day": str(stats_data.get('trades_per_day', 0)),
-                "Daily PnL": f"{stats_data.get('daily_pnl', 0)} USDT"
+                "Daily PnL": f"{stats_data.get('daily_pnl', 0)} USDT",
+                "Percent per annum": f"{stats_data.get('percent_per_annum', 0)}%",
             },
             "Trade Statistics": {
                 "Total Trades": str(stats_data.get('total_trades', 0)),

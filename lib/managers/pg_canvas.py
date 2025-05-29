@@ -513,7 +513,7 @@ class PGCanvas(QWidget):
                 gradient.setColorAt(1, QColor(0, 0, 0, 0))
                 rect_item = QGraphicsRectItem(start_time, bottom, end_time - start_time, top - bottom)
                 rect_item.setBrush(QBrush(gradient))
-                rect_item.setPen(mkPen(None))  # Без обводки
+                rect_item.setPen(mkPen(None)) 
                 self.candlestick_plot.addItem(rect_item)
 
                 top, bottom = max(position['openPrice'], position['slTriggerPx']), min(position['openPrice'], position['slTriggerPx'])
@@ -525,25 +525,23 @@ class PGCanvas(QWidget):
                 gradient.setColorAt(1, QColor(0, 0, 0, 0))
                 rect_item = QGraphicsRectItem(start_time, bottom, end_time - start_time, top - bottom)
                 rect_item.setBrush(QBrush(gradient))
-                rect_item.setPen(mkPen(None))  # Без обводки
+                rect_item.setPen(mkPen(None)) 
                 self.candlestick_plot.addItem(rect_item)
         else:
-            if position['closePrice'] > 0:
-                top, bottom = max(position['openPrice'], position['closePrice']), min(position['openPrice'], position['closePrice'])
-            else:
-                top, bottom = max(position['openPrice'], last_price), min(position['openPrice'], last_price)
-            if position['posSide'] == 'long':
-                gradient = QLinearGradient(start_time, bottom, start_time, top)
-            else:
-                gradient = QLinearGradient(start_time, top, start_time, bottom)
+            if position['closePrice'] == 0: 
+                position['closePrice'] = last_price 
+            
+            gradient = QLinearGradient(start_time, position['openPrice'], start_time, position['closePrice'])
 
-            if last_price > position['openPrice'] and position['posSide'] == 'long' or last_price < position['openPrice'] and position['posSide'] == 'short':
+            if position['closePrice'] > position['openPrice'] and position['posSide'] == 'long' \
+                or position['closePrice'] < position['openPrice'] and position['posSide'] == 'short':
                 gradient.setColorAt(0, QColor(8, 153, 129, 100))
                 gradient.setColorAt(1, QColor(0, 0, 0, 0))
             else:
                 gradient.setColorAt(0, QColor(242, 54, 69, 100))
                 gradient.setColorAt(1, QColor(0, 0, 0, 0))
-            rect_item = QGraphicsRectItem(start_time, bottom, end_time - start_time, top - bottom)
+
+            rect_item = QGraphicsRectItem(start_time, min(position['closePrice'], position['openPrice']), end_time - start_time, abs(position['closePrice'] - position['openPrice']))
             rect_item.setBrush(QBrush(gradient))
             rect_item.setPen(mkPen(None))  # Без обводки
             self.candlestick_plot.addItem(rect_item)

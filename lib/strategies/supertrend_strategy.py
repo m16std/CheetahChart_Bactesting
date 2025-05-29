@@ -67,9 +67,9 @@ class SupertrendStrategy(BaseStrategy):
             if not position_open:
                 if df['Supertrend'].iloc[i-1] < df['Supertrend'].iloc[i]:              
                     tpTriggerPx, slTriggerPx = self.manager.get_tp_sl(df, i, df['close'].iloc[i], profit_factor, 'long', lookback_period)
-                    posId = self.manager.open_position('long', 'market', tpTriggerPx, slTriggerPx, df['close'].iloc[i], qty, df.index[i])
+                    posId = self.manager.open_position('long', 'market', 0, 0, df['close'].iloc[i], qty, df.index[i])
                     position_open = True
                 elif df['Supertrend'].iloc[i-1] > df['Supertrend'].iloc[i]:
                     tpTriggerPx, slTriggerPx = self.manager.get_tp_sl(df, i, df['close'].iloc[i], profit_factor, 'short', lookback_period)
-                    posId = self.manager.open_position('short', 'market', tpTriggerPx, slTriggerPx, df['close'].iloc[i], qty, df.index[i])
+                    posId = self.manager.open_position('short', 'market', 0, 0, df['close'].iloc[i], qty, df.index[i])
                     position_open = True

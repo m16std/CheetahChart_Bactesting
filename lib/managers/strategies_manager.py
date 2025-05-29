@@ -231,37 +231,47 @@ class StrategyManager(QThread):
         return self.current_balance
 
     def calculate_balance(self, df, positions, initial_balance, leverage):
-        current_balance = initial_balance
+        self.current_balance = initial_balance
         balance = []
-        i = 0
 
+        i = 0
         for position in positions:
-            while df.index[i] <= position['openTimestamp'] and df.index[i] < df.index[-1]:
-                balance.append([df.index[i].to_pydatetime(), current_balance])
+            if position['status'] == 'closed':
+                while df.index[i] < position['closeTimestamp'] and df.index[i] < df.index[-1]:
+                    balance.append([df.index[i].to_pydatetime(), self.current_balance])
+                    i += 1
+            else:
+                while df.index[i] < df.index[-1]:
+                    balance.append([df.index[i].to_pydatetime(), self.current_balance])
+                    i += 1
+
+            self.current_balance += position['pnl']
+        while df.index[i] < df.index[-1]:
+            balance.append([df.index[i].to_pydatetime(), self.current_balance])
+            i += 1
+        
+        self.balance = pd.DataFrame(balance, columns=['ts', 'value'])
+        
+        for position in positions:
+            i = 0
+            while df.index[i] < position['openTimestamp']:
                 i += 1
             if position['status'] == 'closed':
                 while df.index[i] < position['closeTimestamp'] and df.index[i] < df.index[-1]:
                     if position['posSide'] == 'long':
-                        balance.append([df.index[i].to_pydatetime(), current_balance + position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                        self.balance['value'].iloc[i] += (position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage)
                     else:
-                        balance.append([df.index[i].to_pydatetime(), current_balance - position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                        self.balance['value'].iloc[i] -= (position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage)
                     i += 1
             else:
                 while df.index[i] < df.index[-1]:
                     if position['posSide'] == 'long':
-                        balance.append([df.index[i].to_pydatetime(), current_balance + position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                        self.balance['value'].iloc[i] += (position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage)
                     else:
-                        balance.append([df.index[i].to_pydatetime(), current_balance - position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage])
+                        self.balance['value'].iloc[i] -= (position['qty']*(df['close'].iloc[i]/position['openPrice']-1)*leverage)
                     i += 1
-            current_balance += position['pnl']
-            
-        while df.index[i] < df.index[-1]:
-            balance.append([df.index[i].to_pydatetime(), current_balance])
-            i += 1
 
-        balance = pd.DataFrame(balance, columns=['ts', 'value'])
-
-        return balance
+        return self.balance
 
     def get_tp_sl(self, df, i, open_price, profit_factor, order_type, lookback):
         lookback = int(lookback)
