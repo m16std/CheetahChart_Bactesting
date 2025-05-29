@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import  QVBoxLayout, QWidget, QHBoxLayout, QScrollArea, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QSplitter
+from PyQt5.QtWidgets import  QVBoxLayout, QFileDialog, QWidget, QHBoxLayout, QScrollArea, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QSplitter
 from PyQt5.QtGui import QPainter, QPixmap, QIcon, QColor, QPainterPath, QPen, QRegion
 from PyQt5.QtCore import Qt, QSettings, QSize, QRect, QRectF, QTimer, QThread, pyqtSignal, QPoint
 from pyqttoast import Toast, ToastPreset
@@ -18,7 +18,7 @@ from lib.windows.settings_window import SettingsWindow
 from lib.api.cryptocompare_api import CryptocompareApi
 from lib.threads.trading_timer import TradingTimer
 from lib.api.okx_load_api import DataDownloadThread
-from lib.managers.file_manager import FileManager, QFileDialog 
+from lib.managers.file_manager import FileManager 
 from lib.managers.neural_network import AIManager
 from lib.threads.price_timer import PriceTimer
 from lib.managers.pg_canvas import PGCanvas
@@ -38,6 +38,8 @@ from lib.api.binance_load_api import BinanceAPI
 from lib.api.bybit_load_api import BybitAPI
 
 pd.options.mode.chained_assignment = None
+
+
 
 import os
 
@@ -714,7 +716,7 @@ class CryptoTradingApp(QWidget):
 
         self.thread.progress_changed.connect(self.on_progress_changed) 
 
-        if self.is_trade == 1:
+        if self.is_trade:
             self.thread.calculation_complete.connect(self.on_calculation_complete_on_trade)
         else:
             self.thread.calculation_complete.connect(self.on_calculation_complete)
@@ -860,7 +862,9 @@ class CryptoTradingApp(QWidget):
         self.log_message('Запущена торговля')
         self.is_trade = True
         self.positions = None
-        self.bar.setFormat("Загрузка")
+        self.bar.setFormat("Ожидание")
+        self.trading_sync_manager.instrument = self.symbol_input.currentText()
+        self.trading_sync_manager.log_signal.connect(self.log_message)
 
         if not hasattr(self, 'timer') or self.timer is None:
             self.timer = TradingTimer(sync_interval=1, delay=3)
@@ -871,13 +875,14 @@ class CryptoTradingApp(QWidget):
 
     def stop_trading(self):
         """Останавливает торговлю."""
+        print("Остановка торговли")
+        self.log_message('Торговля остановлена')
         if self.timer:
-            self.timer.stop()
             self.timer = None
         self.is_trade = False
 
         if self.trading_status_window:
-            self.trading_status_window.update_status("Остановлено") 
+            self.trading_status_window.update_status("Остановлено")
         
     def setup_logging(self, log_file='trading_log.txt'):
         """Настраивает логирование."""
@@ -891,7 +896,6 @@ class CryptoTradingApp(QWidget):
         log_entry = f"{timestamp} - {message}"
         logging.info(log_entry)
 
-
     def update_trading(self):
         """Обновляет данные торговли и синхронизирует их с биржей."""
         symbol = self.symbol_input.currentText()
@@ -899,7 +903,7 @@ class CryptoTradingApp(QWidget):
         limit = self.limit_input.value()
         self.bar.setFormat("Загрузка")
 
-        self.setup_download_thread(symbol, interval, limit, mode=1, on_data_downloaded=self.on_data_downloaded_run_it)
+        self.setup_download_thread(symbol, interval, limit, mode=0, on_data_downloaded=self.on_data_downloaded_run_it)
 
     def update_trading_status_window(self):
         """Асинхронно обновляет окно статуса торговли."""
@@ -1013,7 +1017,7 @@ class CryptoTradingApp(QWidget):
         
         stats = {
             'total_return': round((float(self.canvas.stats['final'].split()[0]) - float(self.canvas.stats['init'].split()[0])) / float(self.canvas.stats['init'].split()[0]) * 100, 2),
-            'percent_per_annum': round((float(self.canvas.stats['final'].split()[0]) - float(self.canvas.stats['init'].split()[0])) / float(self.canvas.stats['init'].split()[0]) * 100 / (self.df.index[-1] - self.df.index[0]).days * 365, 2),
+            'percent_per_annum': round((float(self.canvas.stats['final'].split()[0]) - float(self.canvas.stats['init'].split()[0])) / float(self.canvas.stats['init'].split()[0]) * 100 / max(1, (self.df.index[-1] - self.df.index[0]).days) * 365, 2),
             'profit_factor': round(sum(p['pnl'] for p in winning_trades) / abs(sum(p['pnl'] for p in losing_trades)) if losing_trades else float('inf'), 2),
             'win_rate': float(self.canvas.stats['winrate'].strip('%')),
             'max_drawdown': float(self.canvas.stats['drawdown'].strip('%')),
@@ -1052,7 +1056,7 @@ class CryptoTradingApp(QWidget):
         if not returns:
             return 0
         
-        of_year = (self.df.index[-1] - self.df.index[0]).days / 365
+        of_year = max(1, (self.df.index[-1] - self.df.index[0]).days) / 365
             
         mean_return = round((float(self.canvas.stats['final'].split()[0]) - float(self.canvas.stats['init'].split()[0])) / float(self.canvas.stats['init'].split()[0]) * 100, 2)
         std_dev = (sum((r - mean_return) ** 2 for r in returns) / len(returns)) ** 0.5

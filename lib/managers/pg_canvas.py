@@ -1126,7 +1126,6 @@ class PGCanvas(QWidget):
         grad.setColorAt(1, pg.mkColor('#089981'))
         brush = QtGui.QBrush(grad)
 
-        # Plot with stepMode
         self.daily_income_plot.plot(times, daily_income.values, 
                                   fillLevel=init, 
                                   brush=brush, 
@@ -1135,26 +1134,59 @@ class PGCanvas(QWidget):
                                   name="Balance")
         
     def plot_daily_income(self, balance):
-        """Plot daily income as a line chart"""
-        balance['daily_change'] = balance['value'].diff()
-        daily_income = balance.groupby(balance['ts'].dt.date)['daily_change'].sum()    
-        daily_dates = pd.to_datetime(daily_income.index)
-        times = daily_dates.astype('int64') // 10**9
+        """Plot daily or hourly income as a line chart, depending on timespan"""
+
+        # Вычисляем общее количество дней
+        total_duration = (balance['ts'].max() - balance['ts'].min()).total_seconds()
+
+        if total_duration < 2 * 86400:
+            # Меньше двух суток — считаем доход по часам
+            balance['hour'] = balance['ts'].dt.floor('H')
+            balance['change'] = balance['value'].diff()
+            income = balance.groupby('hour')['change'].sum()
+            x_axis = pd.to_datetime(income.index)
+            label = "Hourly Income"
+        else:
+            # Больше двух суток — считаем доход по дням
+            balance['change'] = balance['value'].diff()
+            income = balance.groupby(balance['ts'].dt.date)['change'].sum()
+            x_axis = pd.to_datetime(income.index)
+            label = "Daily Income"
+
+        # Преобразуем даты в секунды для оси X
+        times = x_axis.astype('int64') // 10**9
+        values = income.values
+
+        # Добавляем фиктивную точку в начало графика со значением 0
+        if len(times) > 0:
+            times = np.insert(times, 0, times[0])
+            values = np.insert(values, 0, 0.0)
 
         init = 0
-        cm = pg.ColorMap([0.0, 1.0], ['#F23645', '#089981'])
-        pen0 = cm.getPen(span=(init-0.5, init+0.0), width=2)
-        
-        value_min = daily_income.min()
-        value_max = daily_income.max()
-        level = (init - value_min)/(value_max - value_min)
+        value_min = values.min()
+        value_max = values.max()
 
+        # Приводим level к диапазону [0, 1] и обрезаем, если за его пределами
+        if value_max != value_min:
+            level = (init - value_min) / (value_max - value_min)
+            level = max(0.0, min(1.0, level))  # Обрезаем до допустимого диапазона
+        else:
+            level = 0.5
+
+        # Градиент от value_min до value_max с прозрачностью на уровне 0
         grad = QtGui.QLinearGradient(0, value_min, 0, value_max)
         grad.setColorAt(0.0, pg.mkColor('#F23645'))
         grad.setColorAt(level, QColor(0, 0, 0, 0))
-        grad.setColorAt(1, pg.mkColor('#089981'))
+        grad.setColorAt(1.0, pg.mkColor('#089981'))
         brush = QtGui.QBrush(grad)
-        self.daily_income_plot.plot(times, daily_income, fillLevel=init, brush=brush, pen=pen0, name="Balance")
+
+        # Цвет линии на основе ColorMap
+        cm = pg.ColorMap([0.0, 1.0], ['#F23645', '#089981'])
+        pen0 = cm.getPen(span=(init - 0.5, init + 0.0), width=2)
+
+        # Очищаем и рисуем
+        self.daily_income_plot.clear()
+        self.daily_income_plot.plot(times, values, fillLevel=init, brush=brush, pen=pen0, name=label)
 
 
     def plot_positions_pnl(self, positions):

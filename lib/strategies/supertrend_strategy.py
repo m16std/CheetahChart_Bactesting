@@ -36,8 +36,7 @@ class SupertrendStrategy(BaseStrategy):
     def run(self, df, initial_balance, position_size, position_type, profit_factor):
         period = self.parameters["period"].value
         multiplier = self.parameters["multiplier"].value
-        lookback_period = self.parameters["lookback_period"].value
-
+        
         sti = self.manager.Supertrend(df, period, multiplier)
         df['Final Lowerband'] = sti['Final Lowerband']
         df['Final Upperband'] = sti['Final Upperband']
@@ -66,10 +65,8 @@ class SupertrendStrategy(BaseStrategy):
 
             if not position_open:
                 if df['Supertrend'].iloc[i-1] < df['Supertrend'].iloc[i]:              
-                    tpTriggerPx, slTriggerPx = self.manager.get_tp_sl(df, i, df['close'].iloc[i], profit_factor, 'long', lookback_period)
                     posId = self.manager.open_position('long', 'market', 0, 0, df['close'].iloc[i], qty, df.index[i])
                     position_open = True
                 elif df['Supertrend'].iloc[i-1] > df['Supertrend'].iloc[i]:
-                    tpTriggerPx, slTriggerPx = self.manager.get_tp_sl(df, i, df['close'].iloc[i], profit_factor, 'short', lookback_period)
                     posId = self.manager.open_position('short', 'market', 0, 0, df['close'].iloc[i], qty, df.index[i])
                     position_open = True

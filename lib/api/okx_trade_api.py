@@ -95,7 +95,7 @@ class OKXApi:
         endpoint = "/api/v5/account/positions"
         return self._send_request("GET", endpoint)
 
-    def open_position(self, symbol, qty, posSide, leverage, tp=None, sl=None):
+    def open_position(self, symbol, qty, posSide, leverage, tp=0, sl=0):
         data = {
             'instId': symbol,
             'lever': leverage,
@@ -104,10 +104,10 @@ class OKXApi:
             'ordType': 'market',
             'sz': qty
         }
-        if tp:
+        if tp != 0:
             data['tpTriggerPx'] = tp
             data['tpOrdPx'] = '-1'
-        if sl:
+        if sl != 0:
             data['slTriggerPx'] = sl
             data['slOrdPx'] = '-1'
 

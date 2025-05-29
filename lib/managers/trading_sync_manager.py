@@ -1,14 +1,15 @@
 from lib.api.okx_trade_api import OKXApi
+from PyQt5.QtCore import QObject, pyqtSignal 
 
-class TradingSyncManager:
-    def __init__(self, api_key=None, api_secret=None, passphrase=None):
-        # Initialize with default or provided API credentials
+class TradingSyncManager(QObject):
+    log_signal = pyqtSignal(object)
+
+    def __init__(self, api_key=None, api_secret=None, passphrase=None, instrument = None):
+        super().__init__()
         self.api = OKXApi(api_key=api_key, api_secret=api_secret, passphrase=passphrase)
-        self.log = []
-
+        self.instrument = instrument
         
     def compare_positions(self, current_positions, previous_positions):
-        log = []
         """
         Синхронизирует изменения между таблицами позиций и записывает лог в файл.
         
@@ -27,64 +28,40 @@ class TradingSyncManager:
         
         # Сравнение текущих и предыдущих позиций
         for current_pos in current_positions:
+            # Эта же позиция из предыдущей таблицы
             matching_pos = next((p for p in previous_positions if p['posId'] == current_pos['posId']), None)
 
-            # Игнорируем не синхронизированные позиции из предыдущей таблицы
+            # Скипаем если она была запетущена в прошлом цикле
             if matching_pos and matching_pos['syncStatus'] == 'unsynced':
                 continue
             
             # Обрабатываем изменения тейка, стопа, статуса
             if matching_pos:
-                changes = []
 
-                if current_pos['status'] != matching_pos['status']:
-                    changes.append(f"status changed to {current_pos['status']}")
-                
-                if current_pos['tpTriggerPx'] != matching_pos['tpTriggerPx']:
-                    changes.append('take profit changed')
-
-                if current_pos['slTriggerPx'] != matching_pos['slTriggerPx']:
-                    changes.append('stop loss changed')
-
-                # Новая обработка: изменение количества
-                if current_pos['qty'] != matching_pos['qty']:
-                    changes.append(f"quantity changed to {current_pos['qty']}")
-
-                # Новая обработка: изменение цены открытия
-                if current_pos['openPrice'] != matching_pos['openPrice']:
-                    changes.append(f"open price changed to {current_pos['openPrice']}")
-
-                if changes:
+                if current_pos['status'] == 'closed' and matching_pos['status'] == 'open':
+                    # Позиция была закрыта
                     try:
-                        # Пытаемся синхронизировать с биржей
-                        #self.api.sync_position(current_pos)
+                        self.api.close_position(self.instrument, current_pos['posId'], current_pos['posSide'])
                         current_pos['syncStatus'] = 'synced'
-                        message = f"Position {current_pos['posId']} synced: {', '.join(changes)}"
-                        self.log_message(message)
-                        self.log_window.update_log(message)
+                        message = f"Position {current_pos['posId']} closed successfully"
+                        self.log_signal.emit(message)
                     except Exception as e:
                         current_pos['syncStatus'] = 'unsynced'
-                        message = f"Error syncing position {current_pos['posId']}: {str(e)}"
-                        self.log_message(message)
-                        self.log_window.update_log(message)
-                else:
-                    current_pos['syncStatus'] = 'synced'
+                        message = f"Error closing position {current_pos['posId']}: {str(e)}"
+                        self.log_signal.emit(message)
             else:
                 if current_pos['status'] == 'open':
                     # Новая позиция
                     try:
-                        #self.api.open_position(current_pos)
+                        self.api.open_position(self.instrument, current_pos['qty'], current_pos['posSide'], current_pos['leverage'], current_pos['tpTriggerPx'], current_pos['slTriggerPx'])
                         current_pos['syncStatus'] = 'synced'
-                        message = f"New position {current_pos['posId']} opened"
-                        self.log_message(message)
-                        self.log_window.update_log(message)
+                        message = f"New position {current_pos['posId']} opened successfully"
+                        self.log_signal.emit(message)
                     except Exception as e:
                         current_pos['syncStatus'] = 'unsynced'
                         message = f"Error opening new position {current_pos['posId']}: {str(e)}"
-                        self.log_message(message)
-                        self.log_window.update_log(message)
-        
-        print(log)
+                        self.log_signal.emit(message)
+
         return current_positions
 
 
@@ -107,9 +84,9 @@ class TradingSyncManager:
                 )
                 if response:
                     pos['synced'] = True
-                    self.log.append(f"Position {pos['posId']} opened on exchange.")
+                    self.log_signal.emit(f"Position {pos['posId']} opened on exchange.")
                 else:
-                    self.log.append(f"Failed to open position {pos['posId']}.")
+                    self.log_signal.emit(f"Failed to open position {pos['posId']}.")
 
             if pos['status'] == 'closed' and pos.get('synced'):
                 # Закрываем позицию на бирже
@@ -120,6 +97,6 @@ class TradingSyncManager:
                 )
                 if response:
                     pos['synced'] = False
-                    self.log.append(f"Position {pos['posId']} closed on exchange.")
+                    self.log_signal.emit(f"Position {pos['posId']} closed on exchange.")
                 else:
-                    self.log.append(f"Failed to close position {pos['posId']}.")
+                    self.log_signal.emit(f"Failed to close position {pos['posId']}.")

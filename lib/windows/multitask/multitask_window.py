@@ -229,11 +229,11 @@ class MultitaskWindow(QWidget):
         # Кнопки управления
         self.buttons_layout = QHBoxLayout()
         self.start_button = QPushButton("Запустить торговлю")
-        self.start_button.clicked.connect(self.start_trading_signal.emit)
+        self.start_button.clicked.connect(self.start_trading)
         self.start_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         self.stop_button = QPushButton("Остановить торговлю")
-        self.stop_button.clicked.connect(self.stop_trading_signal.emit)
+        self.stop_button.clicked.connect(self.stop_trading)
         self.stop_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         self.buttons_layout.addWidget(self.start_button)
@@ -241,6 +241,17 @@ class MultitaskWindow(QWidget):
         self.trading_layout.addLayout(self.buttons_layout)
 
         self.stop_button.setEnabled(False)
+
+    def start_trading(self):
+        self.stop_button.setEnabled(True)
+        self.start_button.setEnabled(False)
+        self.start_trading_signal.emit()
+        
+        
+    def stop_trading(self):
+        self.stop_button.setEnabled(False)
+        self.start_button.setEnabled(True)
+        self.stop_trading_signal.emit()
 
     def init_stats_view(self):
         """Initialize statistics view widgets"""

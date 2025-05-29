@@ -146,7 +146,8 @@ class StrategyManager(QThread):
             'closePrice': 0,
             'closeTimestamp': 0,
             'pnl': 0,
-            'commission': 0
+            'commission': 0,
+            'syncStatus': 'unsynced'  # Статус синхронизации с биржей
         }
         self.positions.append(position)
 
