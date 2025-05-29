@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import  QVBoxLayout, QFileDialog, QWidget, QHBoxLayout, QScrollArea, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QSplitter
+from PyQt5.QtWidgets import  QApplication, QVBoxLayout, QFileDialog, QWidget, QHBoxLayout, QScrollArea, QComboBox, QSpinBox, QProgressBar, QFrame, QDialog, QAction, QMenu, QMenuBar, QLabel, QVBoxLayout, QHBoxLayout, QMessageBox, QSplitter
 from PyQt5.QtGui import QPainter, QPixmap, QIcon, QColor, QPainterPath, QPen, QRegion
 from PyQt5.QtCore import Qt, QSettings, QSize, QRect, QRectF, QTimer, QThread, pyqtSignal, QPoint
 from pyqttoast import Toast, ToastPreset
@@ -89,7 +89,6 @@ class CryptoTradingApp(QWidget):
 
         self.data_loader = None
         self.current_data = None
-        self.setGeometry(50, 50, 1300, 800)
 
         # Создание основного макета с разделителем
         self.splitter = QSplitter(Qt.Horizontal, self)
@@ -133,16 +132,6 @@ class CryptoTradingApp(QWidget):
         self.setLayout(self.layout)
 
         self.show()
-
-    def toggle_log_window(self):
-        """Переключение видимости окна логов."""
-        if self.log_window.isVisible():
-            self.log_window.hide()
-            self.right_splitter.setSizes([600, 0])  # Скрыть окно логов
-        else:
-            self.log_window.show()
-            self.log_window.load_logs()  # Загружаем содержимое файла лога
-            self.right_splitter.setSizes([400, 200]) 
  
  
     def get_menubar(self):
@@ -1004,25 +993,33 @@ class CryptoTradingApp(QWidget):
         """Вычисляет детальную статистику на основе данных позиций и баланса."""
         winning_trades = [p for p in self.positions if p['pnl'] > 0]
         losing_trades = [p for p in self.positions if p['pnl'] <= 0]
+
+        total_return = 0
+        total_percent = 0
         
 
         positions_data = []
         for pos in self.positions:
+            total_return += pos['pnl']
             if pos['status'] == 'closed':  
                 positions_data.append((
                     pos['closeTimestamp'], 
                     float(pos['pnl']),      
                     float(pos['pnl']) > 0 
                 ))
+
+        total_percent = round(total_return / self.balance['value'].iloc[0] * 100, 2)
         
         stats = {
-            'total_return': round((float(self.canvas.stats['final'].split()[0]) - float(self.canvas.stats['init'].split()[0])) / float(self.canvas.stats['init'].split()[0]) * 100, 2),
-            'percent_per_annum': round((float(self.canvas.stats['final'].split()[0]) - float(self.canvas.stats['init'].split()[0])) / float(self.canvas.stats['init'].split()[0]) * 100 / max(1, (self.df.index[-1] - self.df.index[0]).days) * 365, 2),
+            'total_return': total_percent,
+            'percent_per_annum': round(total_percent / max(1, (self.df.index[-1] - self.df.index[0]).days) * 365, 2),
             'profit_factor': round(sum(p['pnl'] for p in winning_trades) / abs(sum(p['pnl'] for p in losing_trades)) if losing_trades else float('inf'), 2),
             'win_rate': float(self.canvas.stats['winrate'].strip('%')),
             'max_drawdown': float(self.canvas.stats['drawdown'].strip('%')),
             'sharpe_ratio': round(self.calculate_sharpe_ratio(), 2),
             'total_trades': len(self.positions),
+            'trades_per_day': round(len(self.positions) / max(1, (self.df.index[-1] - self.df.index[0]).days), 2),
+            'daily_pnl': round(total_return / max(1, (self.df.index[-1] - self.df.index[0]).days), 2),
             'winning_trades': len(winning_trades),
             'losing_trades': len(losing_trades),
             'avg_win': round(sum(p['pnl'] for p in winning_trades) / len(winning_trades), 2) if winning_trades else 0,
@@ -1115,115 +1112,110 @@ class CryptoTradingApp(QWidget):
             self.show_toast(ToastPreset.ERROR, 'Ошибка', 'Нет данных для создания отчета')
             return
 
-        # Определяем фиксированные размеры для отчета и его компонентов
+        # Заданные размеры
         REPORT_WIDTH = 1600
         REPORT_HEIGHT = 2000
         CONTENT_HEIGHT = 1800
-        CONTENT_WIDTH = REPORT_WIDTH - 50  # С учетом отступов
-        TEMP_CANVAS_WIDTH = 950  # Фиксированная ширина для временного холста
-        
-        # Рассчитываем ширины для графиков и статистики (соотношение 10:6)
+        CONTENT_WIDTH = REPORT_WIDTH - 50
+        TEMP_CANVAS_WIDTH = 950
         CHARTS_WIDTH = int(CONTENT_WIDTH * (10/16))
         STATS_WIDTH = int(CONTENT_WIDTH * (6/16))
 
-        # Создаем временный холст с фиксированными размерами
-        temp_canvas = PGCanvas(facecolor='#151924' if self.current_theme == 'dark' else '#ffffff', 
-                             textcolor='white' if self.current_theme == 'dark' else 'black')
+        # Получаем коэффициент масштабирования для Retina
+        screen = QApplication.primaryScreen()
+        device_pixel_ratio = screen.devicePixelRatio() if screen else 1.0
+
+        # Временный холст
+        temp_canvas = PGCanvas(
+            facecolor='#151924' if self.current_theme == 'dark' else '#ffffff',
+            textcolor='white' if self.current_theme == 'dark' else 'black'
+        )
         temp_canvas_widget = temp_canvas.get_canvas()
         temp_canvas_widget.setFixedSize(TEMP_CANVAS_WIDTH, CONTENT_HEIGHT)
-        
-        # Копируем данные на временный холст
         temp_canvas.plot(self.df, self.positions, self.balance, self.indicators)
 
-        # Создаем виджет для отчета
+        # Виджет отчета
         report_widget = QWidget()
         report_widget.setFixedSize(REPORT_WIDTH, REPORT_HEIGHT)
         report_layout = QVBoxLayout(report_widget)
         report_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Добавляем шапку с логотипом
+        # Шапка
         header = QWidget()
         header_layout = QHBoxLayout(header)
         logo = QLabel()
-        if self.current_theme == 'dark':
-            pixmap = QPixmap("resources/wide_logo_w.svg")
-        else:
-            pixmap = QPixmap("resources/wide_logo_b.svg")
+        pixmap = QPixmap("resources/wide_logo_w.svg" if self.current_theme == 'dark' else "resources/wide_logo_b.svg")
         scaled_pixmap = pixmap.scaled(QSize(800, 120), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         logo.setPixmap(scaled_pixmap)
         header_layout.addWidget(logo)
         header_layout.addStretch()
-        
-        # Добавляем информацию о стратегии
         strategy_info = QLabel("BACKTEST REPORT\n"
-                               f"Strategy: {self.strat_input.currentText()}\n"
-                             f"Currency: {self.symbol_input.currentText()}\n"
-                             f"Timeframe: {self.interval_input.currentText()}")
+                            f"Strategy: {self.strat_input.currentText()}\n"
+                            f"Currency: {self.symbol_input.currentText()}\n"
+                            f"Timeframe: {self.interval_input.currentText()}")
         strategy_info.setStyleSheet("font-size: 24px; text-align: right;")
         header_layout.addWidget(strategy_info)
         report_layout.addWidget(header)
 
-        # Создаем контейнер для графиков и статистики с фиксированными размерами
+        # Контент
         content = QWidget()
         content.setFixedHeight(CONTENT_HEIGHT)
         content_layout = QHBoxLayout(content)
         content_layout.setSpacing(20)
         content_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Получаем снимок временного холста
+        # График
         temp_canvas_pixmap = temp_canvas_widget.grab()
-        
-        # Масштабируем изображение под нужную ширину
         scaled_canvas = temp_canvas_pixmap.scaled(
-            CHARTS_WIDTH, 
-            CONTENT_HEIGHT,
+            int(CHARTS_WIDTH * device_pixel_ratio),
+            int(CONTENT_HEIGHT * device_pixel_ratio),
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation
         )
+        scaled_canvas.setDevicePixelRatio(device_pixel_ratio)
 
-        # Создаем контейнер для графиков
         charts_container = QWidget()
         charts_container.setFixedSize(CHARTS_WIDTH, CONTENT_HEIGHT)
         charts_layout = QVBoxLayout(charts_container)
         charts_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Добавляем масштабированное изображение
         canvas_label = QLabel()
         canvas_label.setPixmap(scaled_canvas)
         charts_layout.addWidget(canvas_label)
         content_layout.addWidget(charts_container)
 
-        # Добавляем статистику
+        # Статистика
         stats_container = QWidget()
         stats_container.setFixedSize(STATS_WIDTH, CONTENT_HEIGHT)
         stats_layout = QVBoxLayout(stats_container)
         stats_layout.setContentsMargins(0, 0, 0, 0)
-
         stats = self.calculate_detailed_statistics()
         from lib.windows.multitask.statistics_window import StatisticsWindow
-        stats_window = StatisticsWindow(stats, self.current_theme, font_size=18)  # Увеличенный размер шрифта для отчета
+        stats_window = StatisticsWindow(stats, self.current_theme, font_size=18)
         stats_layout.addWidget(stats_window)
         content_layout.addWidget(stats_container)
 
         report_layout.addWidget(content)
 
-        # Создаем финальное изображение
-        image = QPixmap(REPORT_WIDTH, REPORT_HEIGHT)
+        # Финальное изображение с поддержкой Retina
+        image = QPixmap(int(REPORT_WIDTH * device_pixel_ratio), int(REPORT_HEIGHT * device_pixel_ratio))
+        image.setDevicePixelRatio(device_pixel_ratio)
         image.fill(Qt.transparent)
+
         painter = QPainter(image)
         report_widget.render(painter)
         painter.end()
 
-        # Сохраняем отчет
+        # Сохранение
         file_name, _ = QFileDialog.getSaveFileName(
-            self, 
-            "Сохранить отчет", 
+            self,
+            "Сохранить отчет",
             f"report_{self.strat_input.currentText()}_{self.symbol_input.currentText()}.png",
             "Images (*.png)"
         )
         if file_name:
             image.save(file_name)
             self.show_toast(ToastPreset.SUCCESS, 'Успех', f'Отчет сохранен в {file_name}')
+
 
         # Очищаем временные объекты
         temp_canvas_widget.deleteLater()

@@ -122,7 +122,7 @@ class MultitaskWindow(QWidget):
 
         self.trading_view = QWidget()
         self.trading_layout = QVBoxLayout(self.trading_view)
-        self.trading_layout.setContentsMargins(0, 0, 0, 0) 
+        self.trading_layout.setContentsMargins(0, 4, 0, 8) 
         self.init_trading_view()
         self.stacked_widget.addWidget(self.trading_view)
 

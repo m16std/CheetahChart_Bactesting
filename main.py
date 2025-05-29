@@ -13,6 +13,8 @@ from os import environ
 def main():
     app = QApplication(sys.argv)
     qdarktheme.setup_theme("dark") 
+    app.setApplicationName("CheetahChart Backtesting")  # имя приложения
+    app.setOrganizationName("CheetahChart")   # имя организации
 
     def create_new_tab():
         return CryptoTradingApp()
@@ -32,6 +34,7 @@ def main():
         initial_tab.add_tab_signal.connect(handle_add_tab)
 
     main_window = QWidget()
+    main_window.setWindowTitle("CheetahChart Backtesting")
     main_layout = QVBoxLayout(main_window)
     main_layout.setContentsMargins(0, 0, 0, 0) 
 
@@ -51,7 +54,7 @@ def main():
 
     # Center window on screen
     screen = QDesktopWidget().screenGeometry()
-    main_window.resize(1300, 800)  # Set initial size
+    main_window.resize(1300, 752)  # Set initial size
     size = main_window.frameSize()
     x = (screen.width() - size.width()) // 2
     y = (screen.height() - size.height()) // 2
