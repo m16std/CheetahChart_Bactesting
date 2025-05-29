@@ -59,9 +59,8 @@ class CryptoTradingApp(QWidget):
         self.cryptocompare_api = CryptocompareApi()
         self.trading_sync_manager = TradingSyncManager()
         self.icon_dir = "resources/crypto_icons"
-        logging.basicConfig(filename='trading_log.txt', level=logging.INFO, format='%(asctime)s - %(message)s')
-        logging.info("Приложение запущено.")
-        self.log_window = LogWindow()
+        self.setup_logging()
+        self.log_message('Приложение запущено.')
         self.initUI()       
         self.load_external_strategies()
         self.setup_price_updates()
@@ -345,9 +344,11 @@ class CryptoTradingApp(QWidget):
             if file_name.endswith(".csv"):
                 if self.file_handler.load_candlesticks(file_name):
                     self.plot(self.df, [], [], [])
+                    self.log_message(f'Открыт файл {file_name}.')
             elif file_name.endswith(".py"):
                 editor_tab = PythonEditorWindow(file_name, theme=self.current_theme)
                 self.add_tab_signal.emit(editor_tab, f"Редактор: {os.path.basename(file_name)}")
+                self.log_message(f'Открыт файл {file_name}.')
             else:
                 QMessageBox.warning(self, "Ошибка", "Неподдерживаемый формат файла.")
 
@@ -487,6 +488,7 @@ class CryptoTradingApp(QWidget):
         """Экспортирует стратегию."""
         self.thread = StrategyManager()
         self.thread.run('', [], 0, 0, 0, 0, 0, 0, mode="export") 
+        self.log_message('Экспортирована стратегия.')
         
     def import_strategy(self):
         """Импортирует стратегию из файла и динамически загружает её как класс."""
@@ -505,6 +507,7 @@ class CryptoTradingApp(QWidget):
                     strategy_instance.set_manager(self.strategy_manager)
                     self.add_strategy(strategy_instance.name, strategy_instance)
                     QMessageBox.information(self, "Успех", f"Стратегия {strategy_instance.name} успешно импортирована.")
+                    self.log_message(f'Импортирована стратегия {strategy_instance.name}.')
                     return
             QMessageBox.warning(self, "Ошибка", "Не удалось найти класс стратегии, наследующий BaseStrategy.")
         except Exception as e:
@@ -617,11 +620,13 @@ class CryptoTradingApp(QWidget):
         """Открывает файл и запускает стратегию."""
         if self.file_handler.load_candlesticks():
             self.run_strategy()
+            self.log_message('Проведен бектест на данных из файла.')
 
     def open_and_draw(self):
         """Открывает файл и отображает данные на графике."""
         if self.file_handler.load_candlesticks():
             self.plot(self.df, [], [], [])
+            self.log_message('Открыты ценовые данные.')
 
     def setup_download_thread(self, symbol, interval, limit, mode, on_data_downloaded):
         """Настраивает поток для загрузки данных с выбранного источника."""
@@ -631,6 +636,7 @@ class CryptoTradingApp(QWidget):
         self.thread.show_toast.connect(self.show_toast)
         self.stop_price_updates()
         self.thread.start()
+        self.log_message(f'Запущена загрузка {limit} свечей {interval}')
 
     def download_and_run(self):
         """Скачивает данные и запускает стратегию."""
@@ -640,6 +646,7 @@ class CryptoTradingApp(QWidget):
         self.bar.setFormat("Загрузка")
 
         self.setup_download_thread(symbol, interval, limit, mode=0, on_data_downloaded=self.on_data_downloaded_run_it)
+        self.log_message('Проведен бектест.')
 
     def download_and_save(self):
         """Скачивает данные и сохраняет их."""
@@ -648,6 +655,8 @@ class CryptoTradingApp(QWidget):
         limit = self.limit_input.value()
 
         self.setup_download_thread(symbol, interval, limit, mode=0, on_data_downloaded=self.on_data_downloaded_save_it)
+        self.log_message('Данные сохранены в файл.')
+        
 
     def download_and_draw(self):
         """Скачивает данные и отображает их на графике."""
@@ -657,6 +666,7 @@ class CryptoTradingApp(QWidget):
         self.bar.setFormat("Загрузка")
 
         self.setup_download_thread(symbol, interval, limit, mode=0, on_data_downloaded=self.on_data_downloaded_draw_it)
+        self.log_message('Данные отрисованы.')
 
     def on_progress_changed(self, value):
         """Обновляет значение прогресс-бара."""
@@ -670,6 +680,7 @@ class CryptoTradingApp(QWidget):
         self.thread = None
         self.df = data
         self.run_strategy()
+        
 
     def on_data_downloaded_save_it(self, data):
         """Обрабатывает данные после завершения скачивания для сохранения."""
@@ -847,6 +858,7 @@ class CryptoTradingApp(QWidget):
 
     def start_trading(self):
         """Запускает торговлю."""
+        self.log_message('Запущена торговля')
         self.is_trade = True
         self.positions = None
         self.bar.setFormat("Загрузка")
@@ -870,16 +882,16 @@ class CryptoTradingApp(QWidget):
         
     def setup_logging(self, log_file='trading_log.txt'):
         """Настраивает логирование."""
-        logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(message)s')
+        logging.basicConfig(filename=log_file, level=logging.INFO, format='%(message)s')
         logger = logging.getLogger()
         return logger
 
     def log_message(self, message):
         """Логирует сообщение."""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Формат времени до секунд
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  
         log_entry = f"{timestamp} - {message}"
         logging.info(log_entry)
-        self.log_window.add_log_entry(log_entry)  # Добавление строки в окно логов
+
 
     def update_trading(self):
         """Обновляет данные торговли и синхронизирует их с биржей."""
@@ -1081,6 +1093,7 @@ class CryptoTradingApp(QWidget):
 
     def closeEvent(self, event):
         """Останавливает все потоки перед закрытием приложения."""
+        self.log_message('Приложение закрыто.')
         if hasattr(self, 'timer') and self.timer:
             self.timer.stop()
             self.timer.wait()
@@ -1208,6 +1221,8 @@ class CryptoTradingApp(QWidget):
 
         # Очищаем временные объекты
         temp_canvas_widget.deleteLater()
+
+        self.log_message('Выгружен отчет.')
 
 
 
