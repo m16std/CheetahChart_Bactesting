@@ -727,16 +727,13 @@ class CryptoTradingApp(QWidget):
     def on_calculation_complete_on_trade(self, positions, balance, indicators):
         """Обрабатывает завершение расчета стратегии во время торговли."""
         self.positions = self.trading_sync_manager.compare_positions(positions, self.positions)
-        opened_positions = []
-        for pos in self.positions:
-            if pos['syncStatus'] == 'synced':
-                opened_positions.append(pos)
-        
+        synced_positions = [pos for pos in self.positions if pos['syncStatus'] == 'synced']
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.calculation_complete.disconnect(self.on_calculation_complete_on_trade)
-        self.plot(self.df, positions, balance, indicators)
+        self.plot(self.df, synced_positions, balance, indicators)
         self.trading_status_window.update_data(
-            open_positions=opened_positions,
+            is_active=self.is_trade,
+            open_positions=synced_positions,
         )
 
 
@@ -867,6 +864,7 @@ class CryptoTradingApp(QWidget):
             self.timer = TradingTimer(sync_interval=1, delay=3)
             self.timer.update_chart_signal.connect(self.update_trading)
             self.timer.start()
+            self.trading_status_window.set_trading_timer(self.timer)
             
         self.trading_status_window.show()
 
@@ -880,6 +878,11 @@ class CryptoTradingApp(QWidget):
 
         if self.trading_status_window:
             self.trading_status_window.update_status("Остановлено")
+
+        self.trading_status_window.stop_trading_timer()
+        self.trading_status_window.update_data(
+            is_active=self.is_trade
+        )
         
     def setup_logging(self, log_file='trading_log.txt'):
         """Настраивает логирование."""
@@ -932,7 +935,7 @@ class CryptoTradingApp(QWidget):
     def _apply_trading_status_update(self, data):
         """Применяет обновления, полученные от рабочего потока."""
         self.trading_status_window.update_data(
-            is_active=data["is_active"],
+            is_active=self.is_trade,
             current_pair=data["current_pair"],
             time_to_next_cycle=round(data["time_to_next_cycle"]) if isinstance(data["time_to_next_cycle"], (int, float)) else data["time_to_next_cycle"],
             current_balance=round(data["current_balance"], 3) if isinstance(data["current_balance"], (int, float)) else data["current_balance"],

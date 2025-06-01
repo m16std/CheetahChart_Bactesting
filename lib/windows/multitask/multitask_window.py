@@ -1,6 +1,6 @@
 import os
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QHBoxLayout, QFrame, QSizePolicy, QMenu, QAction, QToolButton, QStackedWidget, QTextEdit
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 from PyQt5.QtGui import QIcon, QColor
 
 from lib.crypto_trading_app import QPainter, QPixmap, QSvgRenderer
@@ -148,6 +148,11 @@ class MultitaskWindow(QWidget):
         self.stacked_widget.setCurrentIndex(0)
         self.apply_theme(self.current_theme)  
 
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.update_remaining_time)
+        self.update_timer.start(1000)  # Обновление каждую секунду
+        self.trading_timer = None
+
     def init_trading_view(self):
         """Initialize trading view widgets"""
         # Статус торговли
@@ -164,7 +169,7 @@ class MultitaskWindow(QWidget):
         self.pair_layout = QHBoxLayout()
         self.pair_label = QLabel("Текущая пара:")
         self.pair_label.setAlignment(Qt.AlignLeft)
-        self.pair_value = QLabel("N/A")
+        self.pair_value = QLabel("  ")
         self.pair_value.setAlignment(Qt.AlignRight)
         self.pair_layout.addWidget(self.pair_label)
         self.pair_layout.addWidget(self.pair_value)
@@ -174,7 +179,7 @@ class MultitaskWindow(QWidget):
         self.time_layout = QHBoxLayout()
         self.time_label = QLabel("Время до следующего цикла:")
         self.time_label.setAlignment(Qt.AlignLeft)
-        self.time_value = QLabel("N/A")
+        self.time_value = QLabel("  ")
         self.time_value.setAlignment(Qt.AlignRight)
         self.time_layout.addWidget(self.time_label)
         self.time_layout.addWidget(self.time_value)
@@ -440,24 +445,31 @@ class MultitaskWindow(QWidget):
         self.toggle_log_signal.emit()
 
     def update_data(self, is_active=False, current_pair=None, open_positions=None, time_to_next_cycle=None, current_balance=None, floating_pnl=None, used_margin=None, min_margin=None):
-        self.status_value.setText("Активно" if is_active else "Остановлено")
-        self.pair_value.setText(current_pair if current_pair else "N/A")
-        self.time_value.setText(f"{time_to_next_cycle} сек" if time_to_next_cycle != "N/A" else "N/A")
-        self.current_balance_value.setText(f"{current_balance} USDT")
-        self.pnl_value.setText(f"{floating_pnl} USDT")
-        self.used_margin_value.setText(f"{used_margin} USDT")
-        self.min_margin_value.setText(f"{min_margin} USDT")
-
-        # Принудительное обновление интерфейса
-        self.status_value.repaint()
-        self.pair_value.repaint()
-        self.time_value.repaint()
-        self.current_balance_value.repaint()
-        self.pnl_value.repaint()
-        self.used_margin_value.repaint()
-        self.min_margin_value.repaint()
-
-        if open_positions:
+        if is_active != None:
+            self.status_value.setText("Активно" if is_active else "Остановлено")
+            self.status_value.repaint()
+            # Обновление состояния кнопок
+            self.start_button.setEnabled(not is_active)
+            self.stop_button.setEnabled(is_active)
+        if current_pair != None:
+            self.pair_value.setText(current_pair if current_pair else "  ")
+            self.pair_value.repaint()
+        if time_to_next_cycle != None:
+            self.time_value.setText(f"{time_to_next_cycle} сек" if time_to_next_cycle != "N/A" else "  ")
+            self.time_value.repaint()
+        if current_balance != None:
+            self.current_balance_value.setText(f"{current_balance} USDT")
+            self.current_balance_value.repaint()
+        if floating_pnl != None:
+            self.pnl_value.setText(f"{floating_pnl} USDT")
+            self.pnl_value.repaint()
+        if used_margin != None:
+            self.used_margin_value.setText(f"{used_margin} USDT")
+            self.used_margin_value.repaint()
+        if min_margin != None:
+            self.min_margin_value.setText(f"{min_margin} USDT")
+            self.min_margin_value.repaint()
+        if open_positions != None:
             self.positions_table.setRowCount(len(open_positions) if open_positions else 0)
             for row, position in enumerate(open_positions):
                 self.positions_table.setItem(row, 0, QTableWidgetItem(str(position.get('posId', 'N/A'))))
@@ -482,11 +494,9 @@ class MultitaskWindow(QWidget):
                     pnl_item.setForeground(QColor('#F23645'))  # Красный
                 self.positions_table.setItem(row, 4, pnl_item)
 
-        self.positions_table.repaint()
+            self.positions_table.repaint()
 
-        # Обновление состояния кнопок
-        self.start_button.setEnabled(not is_active)
-        self.stop_button.setEnabled(is_active)
+
 
     def update_status(self, status_message):
         """Обновляет текст статуса торговли."""
@@ -514,4 +524,18 @@ class MultitaskWindow(QWidget):
         painter.end()
 
         return QIcon(pixmap)
+
+    def update_remaining_time(self):
+        if self.trading_timer and hasattr(self.trading_timer, 'remaining_time'):
+            remaining = self.trading_timer.remaining_time()
+            minutes = int(remaining // 60)
+            seconds = int(remaining % 60)
+            self.time_value.setText(f"{minutes:02d}:{seconds:02d}")
+
+    def set_trading_timer(self, timer):
+        self.trading_timer = timer
+
+    def stop_trading_timer(self):
+        self.update_timer.timeout.disconnect(self.update_remaining_time)
+        self.time_value.setText("  ")
 
