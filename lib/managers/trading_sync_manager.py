@@ -20,10 +20,10 @@ class TradingSyncManager(QObject):
         :return: Обновленная таблица с синхронизацией
         """
 
-            # Первый цикл: если нет предыдущей таблицы
+        # Первый цикл: если нет предыдущей таблицы
         if not previous_positions:
             for pos in current_positions:
-                pos['syncStatus'] = 'synced'  # Добавляем поле синхронизации
+                pos['syncStatus'] = 'unsynced'  # Добавляем поле синхронизации
             return current_positions
         
         # Сравнение текущих и предыдущих позиций

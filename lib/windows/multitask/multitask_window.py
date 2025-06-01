@@ -246,8 +246,7 @@ class MultitaskWindow(QWidget):
         self.stop_button.setEnabled(True)
         self.start_button.setEnabled(False)
         self.start_trading_signal.emit()
-        
-        
+                
     def stop_trading(self):
         self.stop_button.setEnabled(False)
         self.start_button.setEnabled(True)
@@ -440,7 +439,7 @@ class MultitaskWindow(QWidget):
         """Изменяет текст кнопки в зависимости от состояния окна логов."""
         self.toggle_log_signal.emit()
 
-    def update_data(self, is_active, current_pair, open_positions, time_to_next_cycle, current_balance, floating_pnl, used_margin, min_margin):
+    def update_data(self, is_active=False, current_pair=None, open_positions=None, time_to_next_cycle=None, current_balance=None, floating_pnl=None, used_margin=None, min_margin=None):
         self.status_value.setText("Активно" if is_active else "Остановлено")
         self.pair_value.setText(current_pair if current_pair else "N/A")
         self.time_value.setText(f"{time_to_next_cycle} сек" if time_to_next_cycle != "N/A" else "N/A")
@@ -458,8 +457,8 @@ class MultitaskWindow(QWidget):
         self.used_margin_value.repaint()
         self.min_margin_value.repaint()
 
-        self.positions_table.setRowCount(len(open_positions) if open_positions else 0)
         if open_positions:
+            self.positions_table.setRowCount(len(open_positions) if open_positions else 0)
             for row, position in enumerate(open_positions):
                 self.positions_table.setItem(row, 0, QTableWidgetItem(str(position.get('posId', 'N/A'))))
 
