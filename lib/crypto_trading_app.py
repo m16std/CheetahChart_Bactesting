@@ -36,6 +36,7 @@ from lib.windows.data_source_window import DataSourceWindow
 from lib.api.okx_load_api import DataDownloadThread
 from lib.api.binance_load_api import BinanceAPI
 from lib.api.bybit_load_api import BybitAPI
+from lib.windows.help_window import HelpWindow
 
 pd.options.mode.chained_assignment = None
 
@@ -161,7 +162,7 @@ class CryptoTradingApp(QWidget):
         # Добавляем иконку в menubar слева
         menubar.setCornerWidget(icon_label, Qt.TopLeftCorner)
 
-        file_menu = QMenu(' Файл ', self)
+        file_menu = QMenu('Файл', self)
         menubar.addMenu(file_menu)
 
         draw_action = QAction("Открыть", self)
@@ -179,7 +180,7 @@ class CryptoTradingApp(QWidget):
         dad_action.setIcon(self.recolor_svg_icon("resources/file.svg", icon_color))
         file_menu.addAction(dad_action)
 
-        strat_menu = QMenu(' Тестирование ', self)
+        strat_menu = QMenu('Тестирование', self)
         menubar.addMenu(strat_menu)
 
         dat_action = QAction('Загрузить данные', self)
@@ -255,7 +256,7 @@ class CryptoTradingApp(QWidget):
 
         strat_menu.addSeparator()
 
-        trade_menu = QMenu(' Торговля ', self)
+        trade_menu = QMenu('Торговля', self)
         menubar.addMenu(trade_menu)
 
         add_trading_panel_action = QAction('Окно торговли', self)
@@ -278,7 +279,7 @@ class CryptoTradingApp(QWidget):
         check_api_action.setIcon(self.recolor_svg_icon("resources/check.svg", icon_color))
         trade_menu.addAction(check_api_action)
 
-        ai_menu = QMenu(' ИИ ', self)
+        ai_menu = QMenu('ИИ', self)
         menubar.addMenu(ai_menu)
 
         tai_action = QAction('Обучить', self)
@@ -305,7 +306,7 @@ class CryptoTradingApp(QWidget):
         theme_menu.addAction(add_tb_action)
         
 
-        settings_menu = QMenu(' Правка ', self)
+        settings_menu = QMenu('Правка', self)
         menubar.addMenu(settings_menu)
 
         settings_action = QAction('Настройки', self)
@@ -323,8 +324,13 @@ class CryptoTradingApp(QWidget):
         data_source_action.setIcon(self.recolor_svg_icon("resources/source.svg", icon_color))
         settings_menu.addAction(data_source_action)
 
-        help_menu = QAction(' Справка ', self)
-        menubar.addAction(help_menu)
+        help_menu = QMenu('Справка', self)
+        menubar.addMenu(help_menu)
+        help_action = QAction('Пользовательское соглашение', self)
+        help_action.triggered.connect(self.show_help)
+        help_menu.addAction(help_action)
+        
+        
 
         return menubar
 
@@ -1232,7 +1238,10 @@ class CryptoTradingApp(QWidget):
 
         self.log_message('Выгружен отчет.')
 
-
+    def show_help(self):
+        """Открывает окно справки"""
+        help_window = HelpWindow(self)
+        help_window.exec_()
 
 
 
