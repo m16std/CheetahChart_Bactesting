@@ -9,19 +9,21 @@
     "reject_connection_types":{}
   },
   "nodes":{
-    "0x14e863f70":{
+    "0x152d53fd0":{
       "type_":"examples.nodes.\u0426\u0435\u043d\u0430",
       "icon":null,
       "name":"\u0426\u0435\u043d\u0430",
       "color":[
-        31,
-        33,
-        36
+        13,
+        18,
+        23,
+        255
       ],
       "border_color":[
-        58,
-        65,
-        68
+        74,
+        84,
+        85,
+        255
       ],
       "text_color":[
         255,
@@ -35,26 +37,28 @@
       "width":160,
       "height":120.4,
       "pos":[
-        -82.8187679179992,
-        66.05971702249633
+        -120.35866976598713,
+        207.9619953510192
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
       "subgraph_session":{}
     },
-    "0x14e863910":{
+    "0x152d52ce0":{
       "type_":"examples.nodes.RSI",
       "icon":null,
       "name":"RSI",
       "color":[
-        31,
-        33,
-        36
+        13,
+        18,
+        23,
+        255
       ],
       "border_color":[
-        58,
-        65,
-        68
+        74,
+        84,
+        85,
+        255
       ],
       "text_color":[
         255,
@@ -68,62 +72,31 @@
       "width":160,
       "height":74.2,
       "pos":[
-        174.28963877357876,
-        89.29858511248179
-      ],
-      "layout_direction":0,
-      "port_deletion_allowed":false,
-      "subgraph_session":{}
-    },
-    "0x14e9a87c0":{
-      "type_":"examples.nodes.\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
-      "icon":null,
-      "name":"\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
-      "color":[
-        31,
-        33,
-        36
-      ],
-      "border_color":[
-        58,
-        65,
-        68
-      ],
-      "text_color":[
-        255,
-        255,
-        255,
-        180
-      ],
-      "disabled":false,
-      "selected":false,
-      "visible":true,
-      "width":262.03125,
-      "height":79.45,
-      "pos":[
-        433.69559007038254,
-        185.71556376270058
+        191.23909545952117,
+        231.24373795135944
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
       "subgraph_session":{},
       "custom":{
-        "type":"\u041c\u0435\u043d\u044c\u0448\u0435"
+        "period":14
       }
     },
-    "0x14e9a93f0":{
+    "0x152d53d30":{
       "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
       "icon":null,
       "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
       "color":[
-        31,
-        33,
-        36
+        13,
+        18,
+        23,
+        255
       ],
       "border_color":[
-        58,
-        65,
-        68
+        74,
+        84,
+        85,
+        255
       ],
       "text_color":[
         255,
@@ -137,29 +110,31 @@
       "width":259.6875,
       "height":77.35,
       "pos":[
-        98.0831470180596,
-        299.0437004186841
+        -120.38647156360591,
+        335.75717991632604
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
       "subgraph_session":{},
       "custom":{
-        "value":"30"
+        "value":"14"
       }
     },
-    "0x14e9a9000":{
-      "type_":"examples.nodes.\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u041f\u043e\u0437\u0438\u0446\u0438\u044e",
+    "0x152d50b80":{
+      "type_":"examples.nodes.\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
       "icon":null,
-      "name":"\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u041f\u043e\u0437\u0438\u0446\u0438\u044e",
+      "name":"\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
       "color":[
-        31,
-        33,
-        36
+        13,
+        18,
+        23,
+        255
       ],
       "border_color":[
-        58,
-        65,
-        68
+        74,
+        84,
+        85,
+        255
       ],
       "text_color":[
         255,
@@ -170,32 +145,34 @@
       "disabled":false,
       "selected":false,
       "visible":true,
-      "width":238.28125,
-      "height":124.60000000000001,
+      "width":262.03125,
+      "height":79.45,
       "pos":[
-        788.356639346866,
-        269.75696988099116
+        404.3892251666623,
+        208.54124376258537
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
       "subgraph_session":{},
       "custom":{
-        "direction":"LONG"
+        "type":"\u0411\u043e\u043b\u044c\u0448\u0435"
       }
     },
-    "0x14e9a9690":{
+    "0x152d53d90":{
       "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
       "icon":null,
       "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430 1",
       "color":[
-        31,
-        33,
-        36
+        13,
+        18,
+        23,
+        255
       ],
       "border_color":[
-        58,
-        65,
-        68
+        74,
+        84,
+        85,
+        255
       ],
       "text_color":[
         255,
@@ -209,29 +186,31 @@
       "width":269.0625,
       "height":77.35,
       "pos":[
-        459.09841984541913,
-        338.22471921480314
+        79.03984038435175,
+        99.73402061054554
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
       "subgraph_session":{},
       "custom":{
-        "value":"10"
+        "value":"30"
       }
     },
-    "0x14e9aaa70":{
-      "type_":"examples.nodes.\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
+    "0x152d52350":{
+      "type_":"examples.nodes.\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u041f\u043e\u0437\u0438\u0446\u0438\u044e",
       "icon":null,
-      "name":"\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 1",
+      "name":"\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u041f\u043e\u0437\u0438\u0446\u0438\u044e",
       "color":[
-        31,
-        33,
-        36
+        13,
+        18,
+        23,
+        255
       ],
       "border_color":[
-        58,
-        65,
-        68
+        74,
+        84,
+        85,
+        255
       ],
       "text_color":[
         255,
@@ -240,13 +219,51 @@
         180
       ],
       "disabled":false,
-      "selected":true,
+      "selected":false,
+      "visible":true,
+      "width":238.28125,
+      "height":124.60000000000001,
+      "pos":[
+        713.3354573067959,
+        208.19185898027465
+      ],
+      "layout_direction":0,
+      "port_deletion_allowed":false,
+      "subgraph_session":{},
+      "custom":{
+        "direction":"LONG"
+      }
+    },
+    "0x152d51f30":{
+      "type_":"examples.nodes.\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
+      "icon":null,
+      "name":"\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 1",
+      "color":[
+        13,
+        18,
+        23,
+        255
+      ],
+      "border_color":[
+        74,
+        84,
+        85,
+        255
+      ],
+      "text_color":[
+        255,
+        255,
+        255,
+        180
+      ],
+      "disabled":false,
+      "selected":false,
       "visible":true,
       "width":262.03125,
       "height":79.45,
       "pos":[
-        -1129.3637340704063,
-        750.2068710623462
+        429.1186032853696,
+        436.4151912289102
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
@@ -255,88 +272,21 @@
         "type":"\u0411\u043e\u043b\u044c\u0448\u0435"
       }
     },
-    "0x14e9aaa10":{
-      "type_":"examples.nodes.\u041f\u0435\u0440\u0435\u043c\u0435\u043d\u043d\u0430\u044f",
-      "icon":null,
-      "name":"\u041f\u0435\u0440\u0435\u043c\u0435\u043d\u043d\u0430\u044f",
-      "color":[
-        31,
-        33,
-        36
-      ],
-      "border_color":[
-        58,
-        65,
-        68
-      ],
-      "text_color":[
-        255,
-        255,
-        255,
-        180
-      ],
-      "disabled":false,
-      "selected":false,
-      "visible":true,
-      "width":160,
-      "height":60,
-      "pos":[
-        1073.9400277865057,
-        179.78779952624598
-      ],
-      "layout_direction":0,
-      "port_deletion_allowed":false,
-      "subgraph_session":{}
-    },
-    "0x14e9aaec0":{
-      "type_":"examples.nodes.\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
-      "icon":null,
-      "name":"\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 2",
-      "color":[
-        31,
-        33,
-        36
-      ],
-      "border_color":[
-        58,
-        65,
-        68
-      ],
-      "text_color":[
-        255,
-        255,
-        255,
-        180
-      ],
-      "disabled":false,
-      "selected":false,
-      "visible":true,
-      "width":262.03125,
-      "height":79.45,
-      "pos":[
-        455.6533453466848,
-        65.98841900514209
-      ],
-      "layout_direction":0,
-      "port_deletion_allowed":false,
-      "subgraph_session":{},
-      "custom":{
-        "type":"\u041c\u0435\u043d\u044c\u0448\u0435"
-      }
-    },
-    "0x14e9ab790":{
+    "0x152d53580":{
       "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
       "icon":null,
       "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430 2",
       "color":[
-        31,
-        33,
-        36
+        13,
+        18,
+        23,
+        255
       ],
       "border_color":[
-        58,
-        65,
-        68
+        74,
+        84,
+        85,
+        255
       ],
       "text_color":[
         255,
@@ -350,8 +300,8 @@
       "width":270.875,
       "height":77.35,
       "pos":[
-        74.92270119098856,
-        -43.428007674577714
+        61.89062854489596,
+        459.70249418877404
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
@@ -360,19 +310,21 @@
         "value":"70"
       }
     },
-    "0x14e9abcd0":{
-      "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
+    "0x152d529e0":{
+      "type_":"examples.nodes.\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
       "icon":null,
-      "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430 3",
+      "name":"\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
       "color":[
-        31,
-        33,
-        36
+        13,
+        18,
+        23,
+        255
       ],
       "border_color":[
-        58,
-        65,
-        68
+        74,
+        84,
+        85,
+        255
       ],
       "text_color":[
         255,
@@ -383,47 +335,11 @@
       "disabled":false,
       "selected":false,
       "visible":true,
-      "width":271.171875,
-      "height":77.35,
-      "pos":[
-        -164.5040817549915,
-        193.62428494355362
-      ],
-      "layout_direction":0,
-      "port_deletion_allowed":false,
-      "subgraph_session":{},
-      "custom":{
-        "value":"14"
-      }
-    },
-    "0x14e9f4190":{
-      "type_":"examples.nodes.\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
-      "icon":null,
-      "name":"\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
-      "color":[
-        31,
-        33,
-        36
-      ],
-      "border_color":[
-        58,
-        65,
-        68
-      ],
-      "text_color":[
-        255,
-        255,
-        255,
-        180
-      ],
-      "disabled":false,
-      "selected":true,
-      "visible":true,
       "width":160,
-      "height":60,
+      "height":74.2,
       "pos":[
-        995.2398651094463,
-        25.475986206293882
+        758.7997739037341,
+        435.8999135285726
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
@@ -433,102 +349,82 @@
   "connections":[
     {
       "out":[
-        "0x14e863f70",
+        "0x152d53fd0",
         "\u0417\u0430\u043a\u0440\u044b\u0442\u0438\u0435"
       ],
       "in":[
-        "0x14e863910",
+        "0x152d52ce0",
         "\u0426\u0435\u043d\u0430"
       ]
     },
     {
       "in":[
-        "0x14e863910",
+        "0x152d52ce0",
         "\u041f\u0435\u0440\u0438\u043e\u0434"
       ],
       "out":[
-        "0x14e9abcd0",
+        "0x152d53d30",
         "\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435"
       ]
     },
     {
       "out":[
-        "0x14e863910",
+        "0x152d52ce0",
         "RSI"
       ],
       "in":[
-        "0x14e9a87c0",
+        "0x152d50b80",
+        "B"
+      ]
+    },
+    {
+      "out":[
+        "0x152d52ce0",
+        "RSI"
+      ],
+      "in":[
+        "0x152d51f30",
         "A"
       ]
     },
     {
-      "out":[
-        "0x14e863910",
-        "RSI"
-      ],
       "in":[
-        "0x14e9aaec0",
-        "B"
-      ]
-    },
-    {
-      "in":[
-        "0x14e9a87c0",
-        "B"
+        "0x152d50b80",
+        "A"
       ],
       "out":[
-        "0x14e9a93f0",
+        "0x152d53d90",
         "\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435"
       ]
     },
     {
       "out":[
-        "0x14e9a87c0",
+        "0x152d50b80",
         "\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442"
       ],
       "in":[
-        "0x14e9a9000",
+        "0x152d52350",
         "\u0421\u0438\u0433\u043d\u0430\u043b"
       ]
     },
     {
       "in":[
-        "0x14e9a9000",
-        "\u0420\u0430\u0437\u043c\u0435\u0440"
+        "0x152d51f30",
+        "B"
       ],
       "out":[
-        "0x14e9a9690",
+        "0x152d53580",
         "\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435"
       ]
     },
     {
       "out":[
-        "0x14e9a9000",
-        "ID"
+        "0x152d51f30",
+        "\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442"
       ],
       "in":[
-        "0x14e9aaa10",
-        "\u0417\u0430\u043f\u0438\u0441\u044c"
-      ]
-    },
-    {
-      "out":[
-        "0x14e9aaa10",
-        "\u0427\u0442\u0435\u043d\u0438\u0435"
-      ],
-      "in":[
-        "0x14e9f4190",
-        "ID"
-      ]
-    },
-    {
-      "in":[
-        "0x14e9aaec0",
-        "A"
-      ],
-      "out":[
-        "0x14e9ab790",
-        "\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435"
+        "0x152d529e0",
+        "\u0421\u0438\u0433\u043d\u0430\u043b"
       ]
     }
   ]

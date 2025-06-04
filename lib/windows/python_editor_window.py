@@ -3,6 +3,7 @@ from PyQt5.QtGui import QPainter, QPainterPath, QPen, QColor, QDrag, QCursor, QP
 from PyQt5.QtSvg import QSvgRenderer
 from PyQt5.Qsci import QsciScintilla, QsciLexerPython
 from PyQt5.QtCore import Qt, QSize
+import time
 import os
 import sys
 
@@ -165,19 +166,6 @@ class PythonEditorWindow(QWidget):
             QMessageBox.warning(self, "Ошибка", "Не удалось найти TabManager")
             return
 
-        # Сохраняем стратегию в папку стратегий
-        import time
-        strategy_name = f"strategy_{int(time.time())}"
-        strategy_path = os.path.join("strategies", f"{strategy_name}.py")  # Используем папку strategies
-        os.makedirs("strategies", exist_ok=True)
-        
-        try:
-            with open(strategy_path, "w", encoding="utf-8") as file:
-                file.write(self.editor.text())
-        except Exception as e:
-            QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить стратегию: {e}")
-            return
-
         # Получаем список редакторов
         trading_apps = tab_manager.get_trading_editors()
 
@@ -185,11 +173,29 @@ class PythonEditorWindow(QWidget):
         if not trading_apps:
             new_tab = tab_manager.handle_tab_selection("strategy")  # Создаем новый редактор напрямую
             if new_tab:
+                # Сохраняем текущий список стратегий
+                old_strategies = set(new_tab.strat_input.items())
+                
+                # Сохраняем файл в папку стратегий
+                strategy_path = os.path.join("strategies", f"strategy_{int(time.time())}.py")
+                os.makedirs("strategies", exist_ok=True)
+                try:
+                    with open(strategy_path, "w", encoding="utf-8") as file:
+                        file.write(self.editor.text())
+                except Exception as e:
+                    QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить стратегию: {e}")
+                    return
+
+                # Обновляем список и находим новую стратегию
                 new_tab.load_external_strategies()
-                strategy_index = new_tab.strat_input.findText(strategy_name)
-                if strategy_index >= 0:
-                    new_tab.strat_input.setCurrentIndex(strategy_index)
-                    new_tab.run_strategy()
+                new_strategies = set(new_tab.strat_input.items())
+                added_strategy = list(new_strategies - old_strategies)
+                
+                if added_strategy:
+                    strategy_index = new_tab.strat_input.findText(added_strategy[0])
+                    if strategy_index >= 0:
+                        new_tab.strat_input.setCurrentIndex(strategy_index)
+                        new_tab.run_strategy()
             return
 
         # Показываем диалог выбора редактора
@@ -207,14 +213,33 @@ class PythonEditorWindow(QWidget):
 
         target_app = trading_apps[result - 1]
         
-        # Обновляем список стратегий
-        target_app.load_external_strategies()
+        # Сохраняем текущий список стратегий
+        old_strategies = set()
+        for i in range(target_app.strat_input.count()):
+            old_strategies.add(target_app.strat_input.itemText(i))
         
-        # Выбираем новую стратегию и запускаем тестирование
-        strategy_index = target_app.strat_input.findText(strategy_name)
-        if strategy_index >= 0:
-            target_app.strat_input.setCurrentIndex(strategy_index)
-            target_app.run_strategy()
+        # Сохраняем файл в папку стратегий
+        strategy_path = os.path.join("strategies", f"strategy_{int(time.time())}.py")
+        os.makedirs("strategies", exist_ok=True)
+        try:
+            with open(strategy_path, "w", encoding="utf-8") as file:
+                file.write(self.editor.text())
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить стратегию: {e}")
+            return
+
+        # Обновляем список и находим новую стратегию
+        target_app.load_external_strategies()
+        new_strategies = set()
+        for i in range(target_app.strat_input.count()):
+            new_strategies.add(target_app.strat_input.itemText(i))
+
+        added_strategy = list(new_strategies - old_strategies)
+        
+        if added_strategy:
+            strategy_index = target_app.strat_input.findText(added_strategy[0])
+            if strategy_index >= 0:
+                target_app.strat_input.setCurrentIndex(strategy_index)
         else:
             QMessageBox.warning(self, "Ошибка", "Не удалось найти добавленную стратегию в списке.")
 

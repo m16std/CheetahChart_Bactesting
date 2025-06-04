@@ -497,13 +497,18 @@ class VisualStrategyEditor(QWidget):
         else:
             self.graph.set_background_color(255, 255, 255)
             self.graph.set_grid_color(200, 200, 200)    
-            self.graph_widget.setStyleSheet(f"""
+
+
+        self.graph_widget.setStyleSheet(f"""
                 QFrame {{
                     border: 2px solid {graph_border_color};
                     border-radius: 4px;
                 }}
             """)
-
-            self.theme_changed.emit(theme)  
+        
+        for node in self.graph.all_nodes():
+            if isinstance(node, StrategyNode):
+                node.update_theme(theme)
+                print('recolor')
 
         self.theme_changed.emit(theme) 

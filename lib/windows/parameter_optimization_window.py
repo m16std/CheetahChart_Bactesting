@@ -83,16 +83,20 @@ class ParameterOptimizationWindow(QWidget):
 
         # Create tab widget
         tab_widget = QTabWidget()
-        tab_widget.currentChanged.connect(self.on_tab_changed)  # Add tab change handler
-        
-        # Create and add tabs
         direct_tab = self.create_direct_optimization_tab()
         fast_tab = self.create_fast_optimization_tab()
         
         tab_widget.addTab(direct_tab, "Прямая оптимизация")
         tab_widget.addTab(fast_tab, "Быстрая оптимизация")
+
+        tab_widget.currentChanged.connect(self.on_tab_changed)  
         
         inputs_layout.addWidget(tab_widget)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setAlignment(Qt.AlignCenter)
+        inputs_layout.addWidget(self.progress_bar)
+
         layout.addWidget(left_panel)
 
         # Right panel (stacked widget)
@@ -141,8 +145,7 @@ class ParameterOptimizationWindow(QWidget):
         layout.addWidget(self.right_stack)
 
     def on_tab_changed(self, index):
-        """Handle tab changes to show appropriate right panel"""
-        if hasattr(self, 'right_stack'):  # Check if right_stack exists
+        if hasattr(self, 'right_stack'): 
             self.right_stack.setCurrentIndex(index)
         else:
             raise AttributeError("The 'right_stack' attribute is not initialized.")
@@ -151,6 +154,7 @@ class ParameterOptimizationWindow(QWidget):
         """Create tab for direct optimization method"""
         tab = QWidget()
         layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0) 
         
         # Add parameters table
         self.direct_params_table = QTableWidget()
@@ -175,6 +179,9 @@ class ParameterOptimizationWindow(QWidget):
             return
             
         self.direct_params_table.setRowCount(0)
+        # Очищаем словарь чекбоксов перед обновлением таблицы
+        self.param_checkboxes.clear()
+        
         if not self.current_strategy:
             return
             
@@ -239,6 +246,7 @@ class ParameterOptimizationWindow(QWidget):
         """Create tab for fast optimization method"""
         tab = QWidget()
         layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0) 
         
         # Add optimization method selection
         method_layout = QHBoxLayout()
@@ -259,7 +267,6 @@ class ParameterOptimizationWindow(QWidget):
         # Update table with current strategy parameters
         self.update_fast_params_table()
         
-        # Method specific settings group
         self.method_settings_group = QGroupBox("Настройки метода")
         self.method_settings_layout = QVBoxLayout()
         self.method_settings_group.setLayout(self.method_settings_layout)
@@ -444,6 +451,7 @@ class ParameterOptimizationWindow(QWidget):
         """Add control widgets with separate optimize buttons for each tab"""
         bottom_container = QWidget()
         bottom_layout = QVBoxLayout(bottom_container)
+        bottom_layout.setContentsMargins(0, 0, 0, 0) 
         bottom_layout.setAlignment(Qt.AlignBottom)
 
         # Create separate optimize buttons for each tab
@@ -458,11 +466,7 @@ class ParameterOptimizationWindow(QWidget):
             self.fast_optimize_btn.setEnabled(False)
             self.optimize_btn = self.fast_optimize_btn  # Store reference
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setAlignment(Qt.AlignCenter)
-
         bottom_layout.addWidget(self.optimize_btn)
-        bottom_layout.addWidget(self.progress_bar)
         layout.addWidget(bottom_container)
 
     def init_matplotlib_canvas(self):
@@ -736,7 +740,7 @@ class ParameterOptimizationWindow(QWidget):
         
         # Переворачиваем результаты для правильной ориентации
         results = results.T  # Транспонируем матрицу
-        im = ax.imshow(results, cmap='RdYlGn', origin='lower', aspect='auto')
+        im = ax.imshow(results, cmap='RdYlGn', origin='lower', aspect='equal')
         
         # Добавляем значения поверх ячеек
         for i in range(len(values2)):

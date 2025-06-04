@@ -45,9 +45,6 @@ class StrategyNode(BaseNode):
             
         elif self.block_type == 'EMA':
             self.create_property('period', 14)
-            
-        self.model.color = (31, 33, 36)
-        self.model.border_color = (58, 65, 68)
 
 
 
@@ -89,3 +86,11 @@ class StrategyNode(BaseNode):
             except:
                 return 0.0
         return None
+
+    def update_theme(self, theme):
+        if theme == "light":
+            self.model.color = (51, 153, 255) 
+            self.model.border_color = (41, 128, 185)  
+        else:
+            self.model.color = (31, 33, 36)
+            self.model.border_color = (58, 65, 68)

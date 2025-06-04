@@ -43,11 +43,11 @@ class TradingSyncManager(QObject):
                     try:
                         self.api.close_position(self.instrument, current_pos['posId'], current_pos['posSide'])
                         current_pos['syncStatus'] = 'synced'
-                        message = f"Position {current_pos['posId']} closed successfully"
+                        message = f"Позиция {current_pos['posId']} успешно закрыта."
                         self.log_signal.emit(message)
                     except Exception as e:
                         current_pos['syncStatus'] = 'unsynced'
-                        message = f"Error closing position {current_pos['posId']}: {str(e)}"
+                        message = f"Не удалось закрыть позицию {current_pos['posId']}: {str(e)}"
                         self.log_signal.emit(message)
             else:
                 if current_pos['status'] == 'open':
@@ -55,11 +55,11 @@ class TradingSyncManager(QObject):
                     try:
                         self.api.open_position(self.instrument, current_pos['qty'], current_pos['posSide'], current_pos['leverage'], current_pos['tpTriggerPx'], current_pos['slTriggerPx'])
                         current_pos['syncStatus'] = 'synced'
-                        message = f"New position {current_pos['posId']} opened successfully"
+                        message = f"Позиция {current_pos['posId']} успешно открыта."
                         self.log_signal.emit(message)
                     except Exception as e:
                         current_pos['syncStatus'] = 'unsynced'
-                        message = f"Error opening new position {current_pos['posId']}: {str(e)}"
+                        message = f"Не удалось открыть позицию {current_pos['posId']}: {str(e)}"
                         self.log_signal.emit(message)
 
         return current_positions
@@ -84,9 +84,9 @@ class TradingSyncManager(QObject):
                 )
                 if response:
                     pos['synced'] = True
-                    self.log_signal.emit(f"Position {pos['posId']} opened on exchange.")
+                    self.log_signal.emit(f"Позиция {pos['posId']} успешно открыта.")
                 else:
-                    self.log_signal.emit(f"Failed to open position {pos['posId']}.")
+                    self.log_signal.emit(f"Не удалось открыть позицию {pos['posId']}.")
 
             if pos['status'] == 'closed' and pos.get('synced'):
                 # Закрываем позицию на бирже
@@ -97,6 +97,6 @@ class TradingSyncManager(QObject):
                 )
                 if response:
                     pos['synced'] = False
-                    self.log_signal.emit(f"Position {pos['posId']} closed on exchange.")
+                    self.log_signal.emit(f"Позиция {pos['posId']} успешно закрыта.")
                 else:
-                    self.log_signal.emit(f"Failed to close position {pos['posId']}.")
+                    self.log_signal.emit(f"Не удалось закрыть позицию {pos['posId']}.")
