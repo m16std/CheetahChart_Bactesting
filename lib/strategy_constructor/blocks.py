@@ -181,7 +181,7 @@ BLOCK_REGISTRY = {
         'Деление': DivideBlock
     },
     'Торговля': {
-        'Открыть Позицию': OpenPositionBlock,
-        'Закрыть': ClosePositionBlock
+        'Открыть позицию': OpenPositionBlock,
+        'Закрыть позицию': ClosePositionBlock
     }
 }

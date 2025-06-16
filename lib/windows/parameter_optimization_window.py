@@ -16,6 +16,7 @@ from lib.threads.fast_optimization_thread import FastOptimizationThread
 from scipy.optimize import differential_evolution, dual_annealing, minimize
 
 class ParameterOptimizationWindow(QWidget): 
+
     def __init__(self, strategy_manager, parent=None, theme="dark"):
         super().__init__(parent)
         self.strategy_manager = strategy_manager
@@ -62,10 +63,94 @@ class ParameterOptimizationWindow(QWidget):
             }
         }
 
+        self.params = []  # Initialize params list
+        self.param_list = []  # Initialize param_list
+
         self.init_ui()
         if hasattr(parent, 'theme_changed_signal'):
             parent.theme_changed_signal.connect(self.apply_theme)
         
+        self.canvas.mousePressEvent = self.on_canvas_click
+
+        self.current_chart_type = None  # Добавляем атрибут для хранения типа диаграммы
+
+    def on_canvas_click(self, event):
+        """Обрабатывает клик по диаграмме."""
+        if not hasattr(self, 'direct_params_table') or not self.current_chart_type:
+            return
+
+        ax = self.figure.axes[0]
+        if not ax:
+            return
+
+        # Получаем координаты клика
+        pos = ax.get_position()
+        canvas = self.canvas
+        x = event.x() / canvas.width()
+        y = event.y() / canvas.height()
+
+        # Проверяем, попал ли клик в область графика
+        if not (pos.x0 <= x <= pos.x1 and pos.y0 <= y <= pos.y1):
+            return
+
+        # Преобразуем координаты клика в индексы значений
+        x_data = (x - pos.x0) / (pos.x1 - pos.x0)
+        y_data = (y - pos.y0) / (pos.y1 - pos.y0)
+
+        # Обработка в зависимости от типа диаграммы
+        if self.current_chart_type == "single":
+            values = [float(tick.get_text()) for tick in ax.get_xticklabels()]
+            if values:
+                index = int(x_data * len(values))
+                if 0 <= index < len(values):
+                    self.create_test_tab_with_params({
+                        self.param_list[0]: values[index]
+                    })
+        elif self.current_chart_type == "double":
+            x_values = [float(tick.get_text()) for tick in ax.get_xticklabels()]
+            y_values = [float(tick.get_text()) for tick in ax.get_yticklabels()]
+            if x_values and y_values:
+                x_index = int(x_data * len(x_values))
+                y_index = int((1 - y_data) * len(y_values))  # Инвертируем y для правильного соответствия
+                if (0 <= x_index < len(x_values) and 
+                    0 <= y_index < len(y_values)):
+                    self.create_test_tab_with_params({
+                        self.param_list[0]: x_values[x_index],
+                        self.param_list[1]: y_values[y_index]
+                    })
+
+    def create_test_tab_with_params(self, params):
+        """Создает новую вкладку тестирования с заданными параметрами."""
+        from lib.crypto_trading_app import CryptoTradingApp
+        
+        new_tab = CryptoTradingApp()
+        
+        # Копируем настройки из текущего окна
+        new_tab.symbol_input.setCurrentText(self.parent.symbol_input.currentText())
+        new_tab.interval_input.setCurrentText(self.parent.interval_input.currentText())
+        new_tab.limit_input.setValue(self.parent.limit_input.value())
+        
+        # Выбираем ту же стратегию
+        strategy_name = self.current_strategy.name
+        new_tab.strat_input.setCurrentText(strategy_name)
+        
+        # Устанавливаем оптимизированные параметры
+        strategy = new_tab.strategy_manager.strategy_dict[strategy_name]
+        for param_name, value in params.items():
+            if param_name in strategy.parameters:
+                param_type = strategy.parameters[param_name].type
+                strategy.set_parameter(param_name, param_type(value))
+        
+        # Копируем данные
+        new_tab.df = self.df.copy()
+        
+        # Отправляем сигнал для создания новой вкладки
+        if self.parent:
+            self.parent.add_tab_signal.emit(new_tab, f"Test: {strategy_name}")
+            
+            # Запускаем тестирование
+            new_tab.run_strategy()
+
     def init_ui(self):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0) 
@@ -353,13 +438,20 @@ class ParameterOptimizationWindow(QWidget):
             self.parent.show_toast("error", "Ошибка", "Сначала загрузите исторические данные")
             return
             
+        self.fast_optimize_btn.setEnabled(False)
+        self.stop_optimize_btn.setEnabled(True)
+        
         method = self.method_combo.currentText()
         optimizer = self.optimization_methods[method]
         
-        # Get parameters and bounds using parameter keys
+        # Очищаем списки параметров перед новым запуском
         params = []
         bounds = []
+        param_list = []
+        self.params = []
+        self.param_list = []
         
+        # Get parameters and bounds using parameter keys
         for row in range(self.fast_params_table.rowCount()):
             param_desc = self.fast_params_table.item(row, 0).text()
             
@@ -382,9 +474,13 @@ class ParameterOptimizationWindow(QWidget):
             min_val = min_widget.value()
             max_val = max_widget.value()
             
-            params.append(param_key)  # Store parameter key instead of description
-            bounds.append((float(min_val), float(max_val)))  # Ensure float bounds
+            params.append(param_key)
+            param_list.append(param_key)
+            bounds.append((float(min_val), float(max_val)))
 
+        self.params = params
+        self.param_list = param_list
+        
         # Get max_iterations from settings
         method = self.method_combo.currentText()
         max_iterations = None
@@ -397,8 +493,6 @@ class ParameterOptimizationWindow(QWidget):
                     max_iterations = widget.value()
                     break
 
-        self.params = params  
-
         # Create optimization thread
         self.optimize_thread = FastOptimizationThread(
             self.current_strategy,
@@ -410,12 +504,55 @@ class ParameterOptimizationWindow(QWidget):
         if max_iterations:
             self.optimize_thread.max_iterations = max_iterations
         
-        self.optimize_thread.progress_changed.connect(self.progress_bar.setValue)
-        self.optimize_thread.optimization_complete.connect(self.on_optimization_complete)
-        self.optimize_thread.iteration_update.connect(self.update_iteration_result)  # Connect iteration updates
+        # Подключаем сигналы
+        try:
+            self.optimize_thread.progress_changed.connect(self.progress_bar.setValue)
+            self.optimize_thread.optimization_complete.connect(self.on_optimization_complete)
+            self.optimize_thread.iteration_update.connect(self.update_iteration_result)
+        except Exception as e:
+            print(f"Error connecting signals: {str(e)}")
+            return
+        
         self.optimize_btn.setEnabled(False)
-        self.iteration_text.clear()  # Clear previous results
+        self.iteration_text.clear()
         self.optimize_thread.start()
+
+    def stop_optimization(self):
+        """Stop the optimization process"""
+        if hasattr(self, 'optimize_thread') and self.optimize_thread.isRunning():
+            # Устанавливаем флаг остановки
+            self.optimize_thread.stop_flag = True
+            
+            # Отключаем сигналы перед остановкой
+            try:
+                if hasattr(self.optimize_thread, 'progress_changed'):
+                    try:
+                        self.optimize_thread.progress_changed.disconnect()
+                    except TypeError:
+                        pass
+                if hasattr(self.optimize_thread, 'optimization_complete'):
+                    try:
+                        self.optimize_thread.optimization_complete.disconnect()
+                    except TypeError:
+                        pass
+                if hasattr(self.optimize_thread, 'iteration_update'):
+                    try:
+                        self.optimize_thread.iteration_update.disconnect()
+                    except TypeError:
+                        pass
+            except Exception as e:
+                print(f"Error disconnecting signals: {str(e)}")
+
+            # Ждем завершения потока с таймаутом
+            if not self.optimize_thread.wait(1000):  # Ждем 1 секунду
+                self.optimize_thread.terminate()
+                self.optimize_thread.wait()
+
+            # Сбрасываем состояние интерфейса
+            self.fast_optimize_btn.setEnabled(True)
+            self.stop_optimize_btn.setEnabled(False)
+            self.progress_bar.setValue(0)
+            self.parent.show_toast("info", "Оптимизация", "Оптимизация остановлена")
 
     def add_data_controls(self, layout):
         data_group = QHBoxLayout()
@@ -450,23 +587,28 @@ class ParameterOptimizationWindow(QWidget):
     def add_control_widgets(self, layout, optimization_type):
         """Add control widgets with separate optimize buttons for each tab"""
         bottom_container = QWidget()
-        bottom_layout = QVBoxLayout(bottom_container)
+        bottom_layout = QHBoxLayout(bottom_container)  # Changed to QHBoxLayout
         bottom_layout.setContentsMargins(0, 0, 0, 0) 
-        bottom_layout.setAlignment(Qt.AlignBottom)
 
-        # Create separate optimize buttons for each tab
         if optimization_type == "direct":
             self.direct_optimize_btn = QPushButton("Оптимизировать")
             self.direct_optimize_btn.clicked.connect(self.start_optimization)
             self.direct_optimize_btn.setEnabled(False)
-            self.optimize_btn = self.direct_optimize_btn  # Store reference
+            self.optimize_btn = self.direct_optimize_btn
+            bottom_layout.addWidget(self.optimize_btn)
         else:
             self.fast_optimize_btn = QPushButton("Оптимизировать")
             self.fast_optimize_btn.clicked.connect(self.start_fast_optimization)
             self.fast_optimize_btn.setEnabled(False)
-            self.optimize_btn = self.fast_optimize_btn  # Store reference
+            self.optimize_btn = self.fast_optimize_btn
+            
+            self.stop_optimize_btn = QPushButton("Остановить")
+            self.stop_optimize_btn.clicked.connect(self.stop_optimization)
+            self.stop_optimize_btn.setEnabled(False)
+            
+            bottom_layout.addWidget(self.fast_optimize_btn)
+            bottom_layout.addWidget(self.stop_optimize_btn)
 
-        bottom_layout.addWidget(self.optimize_btn)
         layout.addWidget(bottom_container)
 
     def init_matplotlib_canvas(self):
@@ -570,6 +712,9 @@ class ParameterOptimizationWindow(QWidget):
         if not params:
             return
 
+        # Update param_list with parameter names
+        self.param_list = [p[0] for p in params]
+
         self.optimize_thread = OptimizationThread(self.current_strategy, params, self.get_settings())
         self.optimize_thread.progress_changed.connect(self.progress_bar.setValue)
         self.optimize_thread.optimization_complete.connect(self.on_optimization_complete)
@@ -605,7 +750,13 @@ class ParameterOptimizationWindow(QWidget):
         # Clear iteration text area for next run
         self.iteration_text.clear()
 
+        # Enable/disable buttons after optimization
+        if hasattr(self, 'fast_optimize_btn'):
+            self.fast_optimize_btn.setEnabled(True)
+            self.stop_optimize_btn.setEnabled(False)
+
     def optimize_one_param(self, param):
+        """Оптимизация одного параметра"""
         name, min_val, max_val, points = param
         values = np.linspace(min_val, max_val, points)
         results = []
@@ -616,6 +767,7 @@ class ParameterOptimizationWindow(QWidget):
             results.append(pnl)
             
         self.plot_one_param_results(values, results, name)
+        self.param_list = [name]  # Сохраняем имя параметра
 
     def optimize_two_params(self, param1, param2):
         """Оптимизация двух параметров"""
@@ -647,6 +799,7 @@ class ParameterOptimizationWindow(QWidget):
                 self.progress_bar.setValue(progress)
                 
         self.plot_two_param_results(values1, values2, results, name1, name2)
+        self.param_list = [name1, name2]  # Сохраняем имена параметров
 
     def optimize_multiple_params(self, params):
         param_ranges = []
@@ -727,6 +880,7 @@ class ParameterOptimizationWindow(QWidget):
                 f'Best {param_name}: {best_val:.2f}\nPnL: {best_pnl:.2f}',
                 transform=ax.transAxes, va='top', color=text_color)
                 
+        self.current_chart_type = "single"  # Устанавливаем тип диаграммы
         self.canvas.draw()
 
     def plot_two_param_results(self, values1, values2, results, name1, name2):
@@ -769,6 +923,7 @@ class ParameterOptimizationWindow(QWidget):
                 f'Best {name1}: {best_val1:.2f}\nBest {name2}: {best_val2:.2f}\nPnL: {best_pnl:.2f}',
                 transform=ax.transAxes, va='bottom', color=text_color)
 
+        self.current_chart_type = "double"  # Устанавливаем тип диаграммы
         self.canvas.draw()
 
     def run_backtest(self):
@@ -795,6 +950,7 @@ class ParameterOptimizationWindow(QWidget):
         for name, inputs in self.param_inputs.items():
             if not self.param_checkboxes[name].isChecked():
                 value = inputs['value'].value()
+                print(f"Setting parameter {name} to {value}")
                 # Если параметр целочисленный в стратегии, приводим его к int
                 param_type = self.current_strategy.parameters[name].type
                 if param_type == int:
@@ -804,6 +960,7 @@ class ParameterOptimizationWindow(QWidget):
         self.current_strategy.run(**settings)
         
         total_pnl = sum(pos['pnl'] for pos in self.current_strategy.manager.positions)
+        print(f"Total PnL: {total_pnl:.4f}")
         return total_pnl
 
     def log_optimization_results(self, param_names, best_params, best_pnl):
@@ -1022,3 +1179,4 @@ class ParameterOptimizationWindow(QWidget):
         self.iteration_text.append(text)
         scrollbar = self.iteration_text.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+

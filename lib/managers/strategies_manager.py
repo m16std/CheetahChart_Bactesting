@@ -77,9 +77,9 @@ class StrategyManager(QThread):
         self.posId_prev = 1
         self.current_balance = 0
 
-    def run(self, mode="run"):
+    def run(self, mode="test"):
         
-        if mode == "run":
+        if mode == "test":
             self.run_strategy()
         elif mode == "export":
             self.export_strategy()

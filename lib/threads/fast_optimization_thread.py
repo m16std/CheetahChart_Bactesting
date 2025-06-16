@@ -4,6 +4,9 @@ import pandas as pd
 
 from scipy.optimize import differential_evolution, dual_annealing, minimize
 
+class StopOptimizationException(Exception):
+    pass
+
 class FastOptimizationThread(QThread):
     progress_changed = pyqtSignal(int)
     optimization_complete = pyqtSignal(list)
@@ -44,10 +47,14 @@ class FastOptimizationThread(QThread):
         self.strategy.manager.df = self.run_settings['df']
         
         self.iterations = 0
-        self.max_iterations = 100
+        self.stop_flag = False
+        self.current_iteration = 0  # Добавляем счетчик итераций
 
     def objective_function(self, x):
         """Objective function to minimize (negative PnL)"""
+        if self.stop_flag:  # Проверяем флаг остановки
+            raise StopOptimizationException("Optimization stopped by user")
+            
         x = np.array(x).ravel()
         
 
@@ -69,6 +76,7 @@ class FastOptimizationThread(QThread):
         # Configure manager settings first
         self.strategy.manager.leverage = self.manager_settings['leverage']
         self.strategy.manager.commission = self.manager_settings['commission']
+        self.iterations += 1 
         
         try:
             self.strategy.run(**self.run_settings)
@@ -104,10 +112,11 @@ class FastOptimizationThread(QThread):
                     maxiter=self.max_iterations,
                     popsize=15,
                     strategy='best1bin',
-                    updating='immediate',  
-                    workers=1,  # Force sequential execution
+                    updating='immediate',
+                    workers=1,
+                    callback=lambda xk, convergence: bool(self.stop_flag),  # Добавляем callback для проверки флага остановки
                     disp=True,
-                    init='sobol'  # Use better initialization
+                    init='sobol'
                 )
             elif self.optimizer == dual_annealing:
                 result = dual_annealing(
@@ -116,13 +125,15 @@ class FastOptimizationThread(QThread):
                     maxiter=self.max_iterations,
                     initial_temp=5.0,
                     restart_temp_ratio=2e-5,
-                    no_local_search=True
+                    no_local_search=True,
+                    callback=lambda x, f, context: bool(self.stop_flag)  # Добавляем callback
                 )
             else:  # Nelder-Mead
                 result = minimize(
                     fun=self.objective_function,
                     x0=x0,
                     method='Nelder-Mead',
+                    callback=lambda xk: bool(self.stop_flag),  # Добавляем callback
                     options={
                         'maxiter': self.max_iterations,
                         'xatol': 1e-4,
@@ -159,10 +170,18 @@ class FastOptimizationThread(QThread):
             else:
                 raise ValueError("No valid optimization results produced")
 
+        except StopOptimizationException:
+            print("\nOptimization stopped by user")
+            self.progress_changed.emit(0)  # Сбрасываем прогресс
+            self.optimization_complete.emit([])  # Отправляем пустой результат
         except Exception as e:
             print(f"\nOptimization error: {str(e)}")
-            print("=" * 50)
-            # Emit empty list with proper structure to avoid max() error
-            self.optimization_complete.emit([('dummy', 0.0)])
+            self.progress_changed.emit(0)
+            self.optimization_complete.emit([])
+
+    def stop(self):
+        """Public method to stop the optimization"""
+        self.stop_flag = True
+        print("Stop flag set to True")
 
 

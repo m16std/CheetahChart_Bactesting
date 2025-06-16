@@ -1044,6 +1044,8 @@ class PGCanvas(QWidget):
         """Plot positions profitability histogram"""
         if not positions:
             return
+        if len(positions) < 2:
+            return
 
         pnls = [float(p['pnl']) for p in positions if p['status'] == 'closed']
         if not pnls:
@@ -1053,9 +1055,13 @@ class PGCanvas(QWidget):
         
         max_pnl = max(pnls)
         min_pnl = min(pnls)
+        range_pnl = max_pnl - min_pnl
 
-        num_loss_bins = max(0, int( round(num_bins * ((0 - min_pnl) / (max_pnl - min_pnl)))))
-        num_profit_bins = num_bins - num_loss_bins
+        if range_pnl == 0:
+            num_loss_bins = num_profit_bins = max(1, num_bins // 2)
+        else:
+            num_loss_bins = max(1, int(round(num_bins * abs(min(0, min_pnl)) / range_pnl)))
+            num_profit_bins = max(1, int(round(num_bins * max(0, max_pnl) / range_pnl)))
 
         profits = [p for p in pnls if p > 0]
         losses = [p for p in pnls if p <= 0]

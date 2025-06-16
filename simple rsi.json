@@ -9,7 +9,7 @@
     "reject_connection_types":{}
   },
   "nodes":{
-    "0x16c513e20":{
+    "0x14ce0cd30":{
       "type_":"examples.nodes.\u0426\u0435\u043d\u0430",
       "icon":null,
       "name":"\u0426\u0435\u043d\u0430",
@@ -37,14 +37,14 @@
       "width":160,
       "height":120.4,
       "pos":[
-        -229.0,
-        66.0
+        -326.33333115752714,
+        39.73494007361053
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
       "subgraph_session":{}
     },
-    "0x16c534520":{
+    "0x14ce0f130":{
       "type_":"examples.nodes.RSI",
       "icon":null,
       "name":"RSI",
@@ -72,8 +72,8 @@
       "width":160,
       "height":74.2,
       "pos":[
-        60.57187146683151,
-        89.97333161680058
+        -42.43775404490178,
+        63.25702840080966
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
@@ -82,45 +82,7 @@
         "period":14
       }
     },
-    "0x16c5346d0":{
-      "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
-      "icon":null,
-      "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
-      "color":[
-        13,
-        18,
-        23,
-        255
-      ],
-      "border_color":[
-        74,
-        84,
-        85,
-        255
-      ],
-      "text_color":[
-        255,
-        255,
-        255,
-        180
-      ],
-      "disabled":false,
-      "selected":false,
-      "visible":true,
-      "width":259.6875,
-      "height":77.35,
-      "pos":[
-        -268.32425251090206,
-        234.28960606675628
-      ],
-      "layout_direction":0,
-      "port_deletion_allowed":false,
-      "subgraph_session":{},
-      "custom":{
-        "value":"15"
-      }
-    },
-    "0x16c536440":{
+    "0x14ce24fd0":{
       "type_":"examples.nodes.\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
       "icon":null,
       "name":"\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
@@ -148,8 +110,8 @@
       "width":262.03125,
       "height":79.45,
       "pos":[
-        107.35084279408025,
-        353.7904030670486
+        180.69878841737375,
+        275.9196782167833
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
@@ -158,156 +120,7 @@
         "type":"\u041c\u0435\u043d\u044c\u0448\u0435"
       }
     },
-    "0x16c536920":{
-      "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
-      "icon":null,
-      "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430 1",
-      "color":[
-        13,
-        18,
-        23,
-        255
-      ],
-      "border_color":[
-        74,
-        84,
-        85,
-        255
-      ],
-      "text_color":[
-        255,
-        255,
-        255,
-        180
-      ],
-      "disabled":false,
-      "selected":false,
-      "visible":true,
-      "width":269.0625,
-      "height":77.35,
-      "pos":[
-        -291.9851384970473,
-        378.2147645352816
-      ],
-      "layout_direction":0,
-      "port_deletion_allowed":false,
-      "subgraph_session":{},
-      "custom":{
-        "value":"40"
-      }
-    },
-    "0x16c536da0":{
-      "type_":"examples.nodes.\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u041f\u043e\u0437\u0438\u0446\u0438\u044e",
-      "icon":null,
-      "name":"\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u041f\u043e\u0437\u0438\u0446\u0438\u044e",
-      "color":[
-        13,
-        18,
-        23,
-        255
-      ],
-      "border_color":[
-        74,
-        84,
-        85,
-        255
-      ],
-      "text_color":[
-        255,
-        255,
-        255,
-        180
-      ],
-      "disabled":false,
-      "selected":false,
-      "visible":true,
-      "width":238.28125,
-      "height":124.60000000000001,
-      "pos":[
-        476.3344329790735,
-        355.8997626559884
-      ],
-      "layout_direction":0,
-      "port_deletion_allowed":false,
-      "subgraph_session":{},
-      "custom":{
-        "direction":"LONG"
-      }
-    },
-    "0x16c537520":{
-      "type_":"examples.nodes.\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
-      "icon":null,
-      "name":"\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
-      "color":[
-        13,
-        18,
-        23,
-        255
-      ],
-      "border_color":[
-        74,
-        84,
-        85,
-        255
-      ],
-      "text_color":[
-        255,
-        255,
-        255,
-        180
-      ],
-      "disabled":false,
-      "selected":false,
-      "visible":true,
-      "width":160,
-      "height":74.2,
-      "pos":[
-        916.5794298321878,
-        201.49844579352657
-      ],
-      "layout_direction":0,
-      "port_deletion_allowed":false,
-      "subgraph_session":{}
-    },
-    "0x16c537f40":{
-      "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
-      "icon":null,
-      "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430 2",
-      "color":[
-        13,
-        18,
-        23,
-        255
-      ],
-      "border_color":[
-        74,
-        84,
-        85,
-        255
-      ],
-      "text_color":[
-        255,
-        255,
-        255,
-        180
-      ],
-      "disabled":false,
-      "selected":false,
-      "visible":true,
-      "width":270.875,
-      "height":77.35,
-      "pos":[
-        249.97739442865316,
-        183.48278764875272
-      ],
-      "layout_direction":0,
-      "port_deletion_allowed":false,
-      "subgraph_session":{},
-      "custom":{
-        "value":"70"
-      }
-    },
-    "0x16c537c70":{
+    "0x14ce252a0":{
       "type_":"examples.nodes.\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435",
       "icon":null,
       "name":"\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 1",
@@ -335,8 +148,8 @@
       "width":262.03125,
       "height":79.45,
       "pos":[
-        585.5472341765761,
-        90.55428236643837
+        498.81524880199004,
+        58.26104742730877
       ],
       "layout_direction":0,
       "port_deletion_allowed":false,
@@ -344,97 +157,281 @@
       "custom":{
         "type":"\u0411\u043e\u043b\u044c\u0448\u0435"
       }
+    },
+    "0x14ce24dc0":{
+      "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
+      "icon":null,
+      "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
+      "color":[
+        13,
+        18,
+        23,
+        255
+      ],
+      "border_color":[
+        74,
+        84,
+        85,
+        255
+      ],
+      "text_color":[
+        255,
+        255,
+        255,
+        180
+      ],
+      "disabled":false,
+      "selected":false,
+      "visible":true,
+      "width":259.6875,
+      "height":77.35,
+      "pos":[
+        -341.85541948472627,
+        199.3734953128448
+      ],
+      "layout_direction":0,
+      "port_deletion_allowed":false,
+      "subgraph_session":{},
+      "custom":{
+        "value":"15"
+      }
+    },
+    "0x14ce0d420":{
+      "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
+      "icon":null,
+      "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430 1",
+      "color":[
+        13,
+        18,
+        23,
+        255
+      ],
+      "border_color":[
+        74,
+        84,
+        85,
+        255
+      ],
+      "text_color":[
+        255,
+        255,
+        255,
+        180
+      ],
+      "disabled":false,
+      "selected":false,
+      "visible":true,
+      "width":269.0625,
+      "height":77.35,
+      "pos":[
+        -188.1244984376149,
+        298.3092365807877
+      ],
+      "layout_direction":0,
+      "port_deletion_allowed":false,
+      "subgraph_session":{},
+      "custom":{
+        "value":"30"
+      }
+    },
+    "0x14ce24e20":{
+      "type_":"examples.nodes.\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430",
+      "icon":null,
+      "name":"\u041a\u043e\u043d\u0441\u0442\u0430\u043d\u0442\u0430 2",
+      "color":[
+        13,
+        18,
+        23,
+        255
+      ],
+      "border_color":[
+        74,
+        84,
+        85,
+        255
+      ],
+      "text_color":[
+        255,
+        255,
+        255,
+        180
+      ],
+      "disabled":false,
+      "selected":false,
+      "visible":true,
+      "width":270.875,
+      "height":77.35,
+      "pos":[
+        171.088346781378,
+        140.01205055207888
+      ],
+      "layout_direction":0,
+      "port_deletion_allowed":false,
+      "subgraph_session":{},
+      "custom":{
+        "value":"70"
+      }
+    },
+    "0x14ce25000":{
+      "type_":"examples.nodes.\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u043f\u043e\u0437\u0438\u0446\u0438\u044e",
+      "icon":null,
+      "name":"\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u043f\u043e\u0437\u0438\u0446\u0438\u044e",
+      "color":[
+        13,
+        18,
+        23,
+        255
+      ],
+      "border_color":[
+        74,
+        84,
+        85,
+        255
+      ],
+      "text_color":[
+        255,
+        255,
+        255,
+        180
+      ],
+      "disabled":false,
+      "selected":false,
+      "visible":true,
+      "width":160,
+      "height":120.4,
+      "pos":[
+        540.5060122212025,
+        275.9357477953614
+      ],
+      "layout_direction":0,
+      "port_deletion_allowed":false,
+      "subgraph_session":{}
+    },
+    "0x14ce25030":{
+      "type_":"examples.nodes.\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u043f\u043e\u0437\u0438\u0446\u0438\u044e",
+      "icon":null,
+      "name":"\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u043f\u043e\u0437\u0438\u0446\u0438\u044e",
+      "color":[
+        13,
+        18,
+        23,
+        255
+      ],
+      "border_color":[
+        74,
+        84,
+        85,
+        255
+      ],
+      "text_color":[
+        255,
+        255,
+        255,
+        180
+      ],
+      "disabled":false,
+      "selected":false,
+      "visible":true,
+      "width":160,
+      "height":74.2,
+      "pos":[
+        810.4819111170445,
+        252.8393629609851
+      ],
+      "layout_direction":0,
+      "port_deletion_allowed":false,
+      "subgraph_session":{}
     }
   },
   "connections":[
     {
       "out":[
-        "0x16c513e20",
+        "0x14ce0cd30",
         "\u0417\u0430\u043a\u0440\u044b\u0442\u0438\u0435"
       ],
       "in":[
-        "0x16c534520",
+        "0x14ce0f130",
         "\u0426\u0435\u043d\u0430"
       ]
     },
     {
       "in":[
-        "0x16c534520",
+        "0x14ce0f130",
         "\u041f\u0435\u0440\u0438\u043e\u0434"
       ],
       "out":[
-        "0x16c5346d0",
+        "0x14ce24dc0",
         "\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435"
       ]
     },
     {
       "out":[
-        "0x16c534520",
+        "0x14ce0f130",
         "RSI"
       ],
       "in":[
-        "0x16c536440",
+        "0x14ce24fd0",
         "A"
       ]
     },
     {
       "out":[
-        "0x16c534520",
+        "0x14ce0f130",
         "RSI"
       ],
       "in":[
-        "0x16c537c70",
+        "0x14ce252a0",
         "A"
       ]
     },
     {
       "in":[
-        "0x16c536440",
+        "0x14ce24fd0",
         "B"
       ],
       "out":[
-        "0x16c536920",
+        "0x14ce0d420",
         "\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435"
       ]
     },
     {
       "out":[
-        "0x16c536440",
+        "0x14ce24fd0",
         "\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442"
       ],
       "in":[
-        "0x16c536da0",
+        "0x14ce25000",
         "\u0421\u0438\u0433\u043d\u0430\u043b"
       ]
     },
     {
-      "out":[
-        "0x16c536da0",
-        "ID"
-      ],
       "in":[
-        "0x16c537520",
-        "ID"
-      ]
-    },
-    {
-      "in":[
-        "0x16c537520",
-        "\u0421\u0438\u0433\u043d\u0430\u043b"
-      ],
-      "out":[
-        "0x16c537c70",
-        "\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442"
-      ]
-    },
-    {
-      "out":[
-        "0x16c537f40",
-        "\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435"
-      ],
-      "in":[
-        "0x16c537c70",
+        "0x14ce252a0",
         "B"
+      ],
+      "out":[
+        "0x14ce24e20",
+        "\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435"
+      ]
+    },
+    {
+      "out":[
+        "0x14ce252a0",
+        "\u0420\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442"
+      ],
+      "in":[
+        "0x14ce25030",
+        "\u0421\u0438\u0433\u043d\u0430\u043b"
+      ]
+    },
+    {
+      "out":[
+        "0x14ce25000",
+        "ID"
+      ],
+      "in":[
+        "0x14ce25030",
+        "ID"
       ]
     }
   ]

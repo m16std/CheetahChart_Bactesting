@@ -145,8 +145,8 @@ class StrategySettingsWindow(QWidget):
         # Add testing settings fields
         self.testing_widgets = {}
         testing_params = {
-            'initial_balance': ('Initial Balance (USDT)', 1000, float),
-            'position_size': ('Position Size', 100, float),
+            'initial_balance': ('Initial Balance (USDT)', 1000, int),
+            'position_size': ('Position Size', 100, int),
             'leverage': ('Leverage', 1, float),
             'profit_factor': ('Profit Factor', 1.5, float),
             'commission': ('Commission', 0.0008, float),
@@ -160,9 +160,10 @@ class StrategySettingsWindow(QWidget):
             else:
                 label.setStyleSheet("color: #000000; font-size: 12px;")
             
-            widget = QDoubleSpinBox() if param_type == float else QSpinBox()
+            widget = QDoubleSpinBox() if (param_type == float or param_type == int) else QSpinBox()
             widget.setValue(default_value)
-            widget.setDecimals(6 if key == 'commission' else 2)
+            widget.setDecimals(6 if key == 'commission' else 0)
+            if key == 'profit_factor': widget.setDecimals(2)
             widget.setRange(0, 1000000)
             widget.valueChanged.connect(self.parameters_changed.emit)
             

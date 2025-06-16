@@ -1,5 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QListWidget,
-                           QListWidgetItem, QPushButton, QScrollArea, QLabel, QApplication, QFrame, QSizePolicy, QSplitter)
+                           QListWidgetItem, QPushButton, QScrollArea, QLabel, 
+                           QApplication, QFrame, QSizePolicy, QSplitter,
+                           QFileDialog, QInputDialog)  # Add QInputDialog
 from PyQt5.QtCore import Qt, QMimeData, QPointF, QRectF, pyqtSignal, QPoint, QSize
 from PyQt5.QtGui import QPainter, QPainterPath, QPen, QColor, QDrag, QCursor, QPixmap, QIcon
 from PyQt5.QtSvg import QSvgRenderer
@@ -8,6 +10,10 @@ from ..strategy_constructor.blocks import BLOCK_REGISTRY
 from ..strategy_constructor.code_generator import CodeGenerator
 from NodeGraphQt import NodeGraph, constants
 from ..strategy_constructor.node_blocks import StrategyNode
+
+import os
+import subprocess
+import json
 
 class BlockWidget(QWidget):
     connection_started = pyqtSignal(str, QPointF, object)
@@ -407,32 +413,95 @@ class VisualStrategyEditor(QWidget):
 
     def save_strategy(self):
         """Save the current node graph"""
-        self.graph.save_session('strategy.json')
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Strategy",
+            "",
+            "Strategy Files (*.json);;All Files (*)"
+        )
+        if file_path:
+            if not file_path.endswith('.json'):
+                file_path += '.json'
+            try:
+                self.graph.save_session(file_path)
+            except Exception as e:
+                print(f"Error saving strategy: {str(e)}")
 
     def load_strategy(self):
         """Load a saved node graph"""
-        self.graph.clear()
-        self.graph.load_session('strategy.json')
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Strategy",
+            "",
+            "Strategy Files (*.json);;All Files (*)"
+        )
+        if file_path:
+            try:
+                self.graph.load_session(file_path)
+            except Exception as e:
+                print(f"Error loading strategy: {str(e)}")
 
     def generate_code(self):
         """Generate Python code from the node graph"""
-        nodes = self.graph.all_nodes()
-        connections = []
+        # Get strategy name from user
+        strategy_name, ok = QInputDialog.getText(
+            self, 
+            'Strategy Name',
+            'Введите название стратегии:',
+            text='New_Strategy'
+        )
         
-        for node in nodes:
-            for port in node.input_ports():
-                if port.connected_ports():
-                    for connected in port.connected_ports():
-                        connections.append({
-                            'from_node': connected.node().name(),
-                            'from_port': connected.name(),
-                            'to_node': node.name(),
-                            'to_port': port.name()
-                        })
-
-        generator = CodeGenerator(self.model)
-        code = generator.generate_from_graph(nodes, connections)
-        print(code)
+        if not ok:
+            return
+            
+        strategy_name = strategy_name.replace(' ', '_')
+        
+        try:
+            # Create temp file path
+            temp_json = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'temp_strategy.json')
+            
+            # Save graph to temp json file
+            self.graph.save_session(temp_json)
+            
+            # Read json data
+            with open(temp_json, 'r') as f:
+                graph_data = json.loads(f.read())
+            
+            # Remove temp file
+            os.remove(temp_json)
+            
+            # Generate code using json data
+            generator = CodeGenerator(graph_data)
+            code = generator.generate_strategy_class(strategy_name=strategy_name)
+            
+            # Create new editor tab
+            from .python_editor_window import PythonEditorWindow
+            editor = PythonEditorWindow(theme=self.current_theme)
+            editor.editor.setText(code)
+            
+            # Find parent tab manager and add new tab
+            parent = self.parent()
+            while parent and not hasattr(parent, 'add_tab_signal'):
+                parent = parent.parent()
+                
+            if parent and hasattr(parent, 'add_tab_signal'):
+                parent.add_tab_signal.emit(editor, f"Strategy: {strategy_name}")
+            else:
+                # Fallback - save to file and open
+                strategies_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'strategies')
+                file_path = os.path.join(strategies_dir, f'{strategy_name.lower()}.py')
+                with open(file_path, 'w') as f:
+                    f.write(code)
+                if os.name == 'nt':
+                    os.startfile(file_path)
+                elif os.name == 'posix':
+                    try:
+                        subprocess.call(('open', file_path))
+                    except:
+                        subprocess.call(('xdg-open', file_path))
+                    
+        except Exception as e:
+            print(f"Error generating code: {str(e)}")
 
     def apply_theme(self, theme):
         """Apply theme to all visual components, including NodeGraphQt."""
@@ -511,4 +580,75 @@ class VisualStrategyEditor(QWidget):
                 node.update_theme(theme)
                 print('recolor')
 
-        self.theme_changed.emit(theme) 
+        self.theme_changed.emit(theme)
+        graph_border_color = "#ffffff" if theme == "light" else Qt.black
+
+        button_style = f"""
+            QPushButton {{
+                border: none;
+                padding: 4px;
+                margin: 0px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_color};
+            }}
+        """
+
+        for btn in self.buttons.values():
+            if hasattr(btn, 'icon_path'):
+                btn.setIcon(self.recolor_svg_icon(btn.icon_path, icon_color))
+            btn.setStyleSheet(button_style)
+
+        category_frame_style = f"""
+            QFrame {{
+                background-color: {background_color};
+                border-radius: 8px;
+                padding: 3px;
+            }}
+        """
+
+        list_style = f"""
+            QListWidget {{
+                background: transparent;
+                border: none;
+            }}
+            QListWidget::item {{
+                color: {text_color};
+                padding: 5px;
+                font-size: 12px;
+            }}
+            QListWidget::item:hover {{
+                background: {hover_color};
+                border-radius: 4px;
+            }}
+        """
+
+        for i in range(self.scroll_content.layout().count()):
+            widget = self.scroll_content.layout().itemAt(i).widget()
+            if isinstance(widget, QFrame):
+                widget.setStyleSheet(category_frame_style)
+                for child in widget.findChildren(QListWidget):
+                    child.setStyleSheet(list_style)
+
+
+        if theme == "dark":
+            self.graph.set_background_color(21, 25, 36) 
+            self.graph.set_grid_color(50, 50, 50)       
+        else:
+            self.graph.set_background_color(255, 255, 255)
+            self.graph.set_grid_color(200, 200, 200)    
+
+
+        self.graph_widget.setStyleSheet(f"""
+                QFrame {{
+                    border: 2px solid {graph_border_color};
+                    border-radius: 4px;
+                }}
+            """)
+        
+        for node in self.graph.all_nodes():
+            if isinstance(node, StrategyNode):
+                node.update_theme(theme)
+                print('recolor')
+
+        self.theme_changed.emit(theme)

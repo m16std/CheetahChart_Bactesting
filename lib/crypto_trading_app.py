@@ -131,6 +131,7 @@ class CryptoTradingApp(QWidget):
         self.menubar = self.get_menubar()
         self.layout.setMenuBar(self.menubar)
         self.setLayout(self.layout)
+        self.bar.setFormat("Ожидание")
 
         self.show()
  

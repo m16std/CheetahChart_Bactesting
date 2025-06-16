@@ -11,12 +11,10 @@ class OptimizationThread(QThread):
         self.strategy = strategy
         self.params = params
         
-        # Extract manager settings and run settings separately
         self.strategy.manager.df = settings['df']
         self.strategy.manager.leverage = settings['leverage']
         self.strategy.manager.commission = settings['commission']
         
-        # Keep only the settings needed for run()
         self.run_settings = {
             'df': settings['df'],
             'initial_balance': settings['initial_balance'],
@@ -24,6 +22,7 @@ class OptimizationThread(QThread):
             'position_type': settings['position_type'],
             'profit_factor': settings['profit_factor']
         }
+        print(self.run_settings)
 
     def run(self):
         if (len(self.params) == 1):
@@ -35,20 +34,22 @@ class OptimizationThread(QThread):
 
     def run_backtest(self, param_values):
         """Run single backtest with given parameters"""
-        # Set parameters
         for name, value in param_values:
-            # Ensure value is correct type for parameter
+            #print(f"Setting parameter {name} to {value}")
             if self.strategy.parameters[name].type == int:
                 value = int(value)
             elif self.strategy.parameters[name].type == float:
                 value = float(value)
             self.strategy.set_parameter(name, value)
-
-        # Run strategy    
+ 
         self.strategy.run(**self.run_settings)
         
-        # Calculate total PnL
         total_pnl = sum(pos['pnl'] for pos in self.strategy.manager.positions)
+        #print(f"Total PnL: {total_pnl:.4f}")
+        #print(len(self.strategy.manager.positions))
+        #print(self.strategy.manager.positions[0])
+        #print(self.strategy.manager.positions[1])
+        #print(self.strategy.manager.balance['value'].iloc[-1])
         return total_pnl
 
     def optimize_one_param(self, param):
