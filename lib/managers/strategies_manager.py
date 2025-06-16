@@ -86,13 +86,13 @@ class StrategyManager(QThread):
         elif mode == "import":
             self.import_strategy()
         elif mode == "trade":
-            self.trade()
+            self.run_strategy(is_trade=True)
         else:
             print("Неверный режим")
 
         return
 
-    def run_strategy(self):
+    def run_strategy(self, is_trade=False):
         current_strategy = self.strategy_dict.get(self.strat_name)
         self.current_balance = self.initial_balance    
         self.positions = []
@@ -100,7 +100,7 @@ class StrategyManager(QThread):
         self.indicators = []
         self.posId_counter = 1
         current_strategy.run(self.df, self.initial_balance, self.position_size, self.position_type, self.profit_factor)
-        self.balance = self.calculate_balance(self.df, self.positions, self.initial_balance, self.leverage)
+        self.balance = self.calculate_balance(self.df, self.positions, self.initial_balance, self.leverage, is_trade)
         self.calculation_complete.emit(self.positions, self.balance, self.indicators)
         
 # Приспособы для работы стратегий
@@ -231,12 +231,19 @@ class StrategyManager(QThread):
     def get_current_balance(self):
         return self.current_balance
 
-    def calculate_balance(self, df, positions, initial_balance, leverage):
+    def calculate_balance(self, df, positions, initial_balance, leverage, is_trade=False):
+        """Рассчитывает баланс с учетом режима торговли"""
         self.current_balance = initial_balance
         balance = []
 
+        # Фильтруем позиции в зависимости от режима
+        if is_trade:
+            filtered_positions = [pos for pos in positions if pos.get('syncStatus', '') == 'synced']
+        else:
+            filtered_positions = positions
+
         i = 0
-        for position in positions:
+        for position in filtered_positions:
             if position['status'] == 'closed':
                 while df.index[i] < position['closeTimestamp'] and df.index[i] < df.index[-1]:
                     balance.append([df.index[i].to_pydatetime(), self.current_balance])
@@ -253,7 +260,7 @@ class StrategyManager(QThread):
         
         self.balance = pd.DataFrame(balance, columns=['ts', 'value'])
         
-        for position in positions:
+        for position in filtered_positions:
             i = 0
             while df.index[i] < position['openTimestamp']:
                 i += 1

@@ -37,7 +37,7 @@ class TradingSyncManager(QObject):
             
             # Обрабатываем изменения тейка, стопа, статуса
             if matching_pos:
-
+                current_pos['syncStatus'] = 'synced'
                 if current_pos['status'] == 'closed' and matching_pos['status'] == 'open':
                     # Позиция была закрыта
                     try:
@@ -46,7 +46,7 @@ class TradingSyncManager(QObject):
                         message = f"Позиция {current_pos['posId']} успешно закрыта."
                         self.log_signal.emit(message)
                     except Exception as e:
-                        current_pos['syncStatus'] = 'unsynced'
+                        current_pos['syncStatus'] = 'synced'
                         message = f"Не удалось закрыть позицию {current_pos['posId']}: {str(e)}"
                         self.log_signal.emit(message)
             else:
@@ -58,7 +58,7 @@ class TradingSyncManager(QObject):
                         message = f"Позиция {current_pos['posId']} успешно открыта."
                         self.log_signal.emit(message)
                     except Exception as e:
-                        current_pos['syncStatus'] = 'unsynced'
+                        current_pos['syncStatus'] = 'synced'
                         message = f"Не удалось открыть позицию {current_pos['posId']}: {str(e)}"
                         self.log_signal.emit(message)
 

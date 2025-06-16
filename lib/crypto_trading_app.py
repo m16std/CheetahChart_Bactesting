@@ -714,11 +714,11 @@ class CryptoTradingApp(QWidget):
 
         if self.is_trade:
             self.thread.calculation_complete.connect(self.on_calculation_complete_on_trade)
+            self.thread.run(mode="trade")  
         else:
             self.thread.calculation_complete.connect(self.on_calculation_complete)
-        
-        self.thread.run() 
-    
+            self.thread.run(mode="test") 
+
     def on_calculation_complete(self, positions, balance, indicators):
         """Обрабатывает завершение расчета стратегии."""
         self.positions = positions
@@ -737,10 +737,12 @@ class CryptoTradingApp(QWidget):
         synced_positions = [pos for pos in self.positions if pos['syncStatus'] == 'synced']
         self.thread.progress_changed.disconnect(self.on_progress_changed) 
         self.thread.calculation_complete.disconnect(self.on_calculation_complete_on_trade)
+        balance = self.strategy_manager.calculate_balance(self.df, synced_positions, self.initial_balance, self.leverage, self.is_trade)
         self.plot(self.df, synced_positions, balance, indicators)
+        open_positions = [pos for pos in synced_positions if pos['status'] == 'open']
         self.trading_status_window.update_data(
             is_active=self.is_trade,
-            open_positions=synced_positions,
+            open_positions=open_positions,
         )
 
 
